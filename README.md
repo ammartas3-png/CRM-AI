@@ -1,40 +1,50 @@
-# CRM-AI Telegram Bot
+# CRM-AI Telegram Bot (Vercel Webhook)
 
-This project contains a Telegram bot with the following flow:
+This project is configured for **Vercel deployment** using Telegram webhooks.
+
+## Bot flow
 
 1. User sends `/start`
-2. Bot shows a **Database check** button
-3. User taps the button, bot asks for an Excel file
-4. Bot uploads the file to:
+2. Bot returns an inline button: **Database check**
+3. User taps the button and bot asks for an Excel file (`.xls` / `.xlsx`)
+4. Bot sends that file to:
    `https://ammartd20.app.n8n.cloud/webhook-test/Database-check`
-5. Bot sends the webhook response back to the same Telegram user
+5. Bot returns the webhook response back to the same user
+   - text/JSON responses are sent as a message
+   - binary responses are sent as a Telegram document
 
-## Requirements
+## Endpoints
 
-- Python 3.10+
+- `POST /api/telegram` - Telegram webhook receiver
+- `GET /api/set_webhook` - One-click webhook registration helper
 
-## Setup
+## Required Vercel environment variables
 
-1. Install dependencies:
+- `TELEGRAM_BOT_TOKEN` (required)
 
-   ```bash
-   pip install -r requirements.txt
-   ```
+## Optional environment variables
 
-2. Export your bot token:
+- `DATABASE_CHECK_WEBHOOK_URL`
+  - default: `https://ammartd20.app.n8n.cloud/webhook-test/Database-check`
+- `APP_BASE_URL`
+  - example: `https://your-project-name.vercel.app`
+  - used by `/api/set_webhook` when it cannot infer host headers
+- `TELEGRAM_WEBHOOK_SECRET`
+  - optional security header for Telegram webhook requests
+- `WEBHOOK_SETUP_KEY`
+  - optional key to protect `/api/set_webhook`
 
-   ```bash
-   export TELEGRAM_BOT_TOKEN="YOUR_TELEGRAM_BOT_TOKEN"
-   ```
+## Deploy on Vercel
 
-3. (Optional) Override webhook URL:
+1. Import this repository into Vercel.
+2. Set at least:
+   - `TELEGRAM_BOT_TOKEN`
+3. Deploy.
+4. Register Telegram webhook:
+   - Open:
+     - `https://<your-vercel-domain>/api/set_webhook`
+   - If you configured `WEBHOOK_SETUP_KEY`:
+     - `https://<your-vercel-domain>/api/set_webhook?key=<your_key>`
+5. Confirm it returns `"ok": true`.
 
-   ```bash
-   export DATABASE_CHECK_WEBHOOK_URL="https://ammartd20.app.n8n.cloud/webhook-test/Database-check"
-   ```
-
-## Run
-
-```bash
-python bot.py
-```
+After this, your bot is live on Vercel.
