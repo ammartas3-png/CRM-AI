@@ -63,3 +63,7 @@ After this, your bot is live on Vercel.
    - ensure `url` matches your Vercel domain and `last_error_message` is empty
 4. If you use `WEBHOOK_SETUP_KEY`, include:
    - `?key=<your_key>` on `set_webhook` and `webhook_info` URLs
+5. If Telegram works but n8n does not trigger:
+   - your n8n Webhook node must accept `POST` requests
+   - in n8n editor test mode, use `/webhook-test/...` while "Listen for test event" is active
+   - for always-on production, use `/webhook/...` and keep the workflow active

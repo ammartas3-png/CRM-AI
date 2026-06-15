@@ -157,7 +157,12 @@ async def _send_to_processing_webhook(
     async with httpx.AsyncClient(timeout=180.0) as client:
         response = await client.post(webhook_url, files=files)
 
-    response.raise_for_status()
+    if response.status_code >= 400:
+        body_preview = response.text[:400]
+        raise RuntimeError(
+            f"Processing webhook failed with HTTP {response.status_code}: {body_preview}"
+        )
+
     return (
         response.headers.get("content-type", "").lower(),
         response.headers.get("content-disposition", ""),
@@ -221,55 +226,63 @@ async def _handle_document_message(
     if not file_id:
         raise RuntimeError("Telegram document payload did not include file_id.")
 
-    file_bytes = await _download_telegram_file(token, file_id)
-    content_type, content_disposition, response_body = await _send_to_processing_webhook(
-        file_name=file_name,
-        file_bytes=file_bytes,
-        mime_type=mime_type,
-    )
+    try:
+        file_bytes = await _download_telegram_file(token, file_id)
+        content_type, content_disposition, response_body = await _send_to_processing_webhook(
+            file_name=file_name,
+            file_bytes=file_bytes,
+            mime_type=mime_type,
+        )
 
-    if "application/json" in content_type:
-        try:
-            parsed_payload = json.loads(response_body.decode("utf-8"))
-            if isinstance(parsed_payload, dict):
-                message_text = parsed_payload.get("message") or parsed_payload.get("text")
-                if message_text:
-                    await _send_text_message(token, chat_id, str(message_text))
+        if "application/json" in content_type:
+            try:
+                parsed_payload = json.loads(response_body.decode("utf-8"))
+                if isinstance(parsed_payload, dict):
+                    message_text = parsed_payload.get("message") or parsed_payload.get("text")
+                    if message_text:
+                        await _send_text_message(token, chat_id, str(message_text))
+                    else:
+                        await _send_text_message(
+                            token,
+                            chat_id,
+                            json.dumps(parsed_payload, indent=2),
+                        )
                 else:
-                    await _send_text_message(
-                        token,
-                        chat_id,
-                        json.dumps(parsed_payload, indent=2),
-                    )
-            else:
-                await _send_text_message(token, chat_id, str(parsed_payload))
-        except Exception:
+                    await _send_text_message(token, chat_id, str(parsed_payload))
+            except Exception:
+                await _send_text_message(
+                    token,
+                    chat_id,
+                    response_body.decode("utf-8", errors="replace"),
+                )
+            return
+
+        if content_type.startswith("text/"):
             await _send_text_message(
                 token,
                 chat_id,
                 response_body.decode("utf-8", errors="replace"),
             )
-        return
+            return
 
-    if content_type.startswith("text/"):
+        response_file_name = _extract_filename(
+            content_disposition,
+            f"processed_{file_name}",
+        )
+        await _send_document_message(
+            token=token,
+            chat_id=chat_id,
+            file_name=response_file_name,
+            file_bytes=response_body,
+            mime_type=content_type,
+        )
+    except Exception as exc:
+        logger.exception("Failed to process uploaded document.")
         await _send_text_message(
             token,
             chat_id,
-            response_body.decode("utf-8", errors="replace"),
+            f"Failed to process file via webhook. Error: {str(exc)[:350]}",
         )
-        return
-
-    response_file_name = _extract_filename(
-        content_disposition,
-        f"processed_{file_name}",
-    )
-    await _send_document_message(
-        token=token,
-        chat_id=chat_id,
-        file_name=response_file_name,
-        file_bytes=response_body,
-        mime_type=content_type,
-    )
 
 
 async def _handle_update(token: str, update: dict[str, Any]) -> None:
