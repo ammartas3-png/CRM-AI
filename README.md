@@ -17,6 +17,7 @@ This project is configured for **Vercel deployment** using Telegram webhooks.
 
 - `POST /api/telegram` - Telegram webhook receiver
 - `GET /api/set_webhook` - One-click webhook registration helper
+- `GET /api/webhook_info` - show Telegram webhook status
 
 ## Required Vercel environment variables
 
@@ -48,3 +49,16 @@ This project is configured for **Vercel deployment** using Telegram webhooks.
 5. Confirm it returns `"ok": true`.
 
 After this, your bot is live on Vercel.
+
+## Troubleshooting (bot not responding)
+
+1. Check function is reachable:
+   - `https://<your-vercel-domain>/api/telegram`
+   - should return a JSON health message
+2. Register webhook again:
+   - `https://<your-vercel-domain>/api/set_webhook`
+3. Verify webhook status:
+   - `https://<your-vercel-domain>/api/webhook_info`
+   - ensure `url` matches your Vercel domain and `last_error_message` is empty
+4. If you use `WEBHOOK_SETUP_KEY`, include:
+   - `?key=<your_key>` on `set_webhook` and `webhook_info` URLs

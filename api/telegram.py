@@ -297,11 +297,15 @@ async def _handle_update(token: str, update: dict[str, Any]) -> None:
 
 
 @app.get("/")
+@app.get("/api/telegram")
+@app.get("/api/telegram/")
 async def healthcheck() -> dict[str, Any]:
     return {"ok": True, "message": "Telegram webhook endpoint is running."}
 
 
 @app.post("/")
+@app.post("/api/telegram")
+@app.post("/api/telegram/")
 async def telegram_webhook(
     request: Request,
     x_telegram_bot_api_secret_token: Optional[str] = Header(default=None),
@@ -315,6 +319,8 @@ async def telegram_webhook(
         update = await request.json()
     except Exception as exc:
         raise HTTPException(status_code=400, detail="Invalid JSON body.") from exc
+
+    logger.info("Received Telegram update (keys=%s)", list(update.keys()))
 
     try:
         await _handle_update(token, update)
