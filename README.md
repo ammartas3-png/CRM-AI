@@ -15,6 +15,7 @@ This project is configured for **Vercel deployment** using Telegram webhooks.
 
 ## Endpoints
 
+- `/` - deployment landing page with setup links
 - `POST /api/telegram` - Telegram webhook receiver
 - `GET /api/set_webhook` - One-click webhook registration helper
 - `GET /api/webhook_info` - show Telegram webhook status

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Telegram Bot on Vercel</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 2rem;
+        max-width: 720px;
+        line-height: 1.5;
+      }
+      code {
+        background: #f3f4f6;
+        padding: 0.15rem 0.35rem;
+        border-radius: 4px;
+      }
+      a {
+        color: #2563eb;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Telegram Database Check Bot</h1>
+    <p>This deployment is running. Use these endpoints:</p>
+    <ul>
+      <li><a href="/api/telegram">/api/telegram</a> (health check)</li>
+      <li><a href="/api/set_webhook">/api/set_webhook</a> (register Telegram webhook)</li>
+      <li><a href="/api/webhook_info">/api/webhook_info</a> (view Telegram webhook status)</li>
+    </ul>
+    <p>
+      If you configured <code>WEBHOOK_SETUP_KEY</code>, open:
+      <code>/api/set_webhook?key=YOUR_KEY</code> and
+      <code>/api/webhook_info?key=YOUR_KEY</code>.
+    </p>
+  </body>
+</html>
