@@ -1,0 +1,17 @@
+---
+description: Cursor-native workflow for speed and token efficiency
+alwaysApply: true
+---
+
+## Plan before complex work
+Use Plan Mode (Shift+Tab) for multi-file features, architecture, or unclear scope.
+Save approved plans to `.cursor/plans/` when useful for CRM-AI.
+
+## Agent usage
+- Use Background / Cloud Agents for parallel tasks (tests, docs, refactors).
+- Use subagents for exploration vs implementation separation.
+- Prefer `@` file references over pasting large code blocks.
+
+## Cost control
+- Keep always-on rules short; use skills for long checklists.
+- Enable llmlingua-compressor MCP for large tool outputs when available.

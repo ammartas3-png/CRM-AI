@@ -1,0 +1,12 @@
+---
+description: LLMLingua-2 prompt compression via MCP (token savings)
+alwaysApply: false
+---
+
+Before producing a response on large inputs (logs, long files, verbose tool output),
+call MCP server `llmlingua-compressor`, tool `optimize_context`, then reason on
+the compressed context. Skip for short prompts. If the MCP call fails, continue
+with the original context.
+
+Target rates: default 0.50; explain/summarize 0.45; logs 0.40; refactor 0.55;
+very large input (>500 lines) 0.30.
