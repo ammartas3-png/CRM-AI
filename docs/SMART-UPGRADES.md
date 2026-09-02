@@ -50,6 +50,6 @@ Applied after reviewing execution #1114 input vs output:
 2. **Keep sheet subtype on no_money** — preserve `No Potential - no documents` instead of collapsing
 3. **Merge continuation comment lines** — multiline bodies keep timestamp so `cb tmrw` stays with the talk
 4. **busy_after_pickup** — `pu ... busy/lm` is Call Again, not `no_real_conversation`
-5. **Stale callback then NA** — newer `rej`/`navm` overrides older Call Again
+5. **Call Again → No Answer only after 5 distinct NA days** — 1–4 days of `rej`/`navm` do NOT wipe Call Again (`call_again_kept_under_5na` / `call_again_5na_days`)
 6. **Appointment timestamp false positives** — reject metadata dates as `When To Call`
 7. **AI prompts** — money+concrete callback → Call Again; Appointment AI anti-false-positive rules
