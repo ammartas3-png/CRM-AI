@@ -13,6 +13,17 @@ Live n8n workflow `Telegram Database Validator Bot V2` now includes:
 9. Telegram summary message before XLSX reports
 10. Decision Memory Logger + Google Sheets `Decision_Memory` append
 11. Rule Hit Tracker in workflow staticData
+12. Slim main Excel report (34 → 15 columns): drops internal/AI-debug fields
+
+### Main report columns (kept)
+
+`brand`, `account no`, `customer status`, `Suggested Status`, `Validation Result`, `Reason`, `Decision Source`, `Confidence`, `Review Priority`, `Injection Flag`, `When To Call`, `Agent`, `country`, `Current Agent Office`, `last 10 comments`
+
+### Dropped from main report (still computed internally)
+
+`memory_matched`, `skipAI`, `matched_trigger`, `Matched Sheet Row`, `Matched Keyword`, appointment debug fields, `Rule Hit Count`, all `AI Check*` / verifier debug columns, `Confidence Score` / `Confidence Reason`, `Auto Accept`
+
+Manual Entry and 5UP files were already slim and are unchanged.
 
 ## Supporting GitHub-inspired layers in repo
 
