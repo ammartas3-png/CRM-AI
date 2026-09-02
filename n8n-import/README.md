@@ -1,32 +1,15 @@
 # n8n Import Dosyalari
 
-## SIMDI BUNU IMPORT ET
+## Canli sistem (API ile uygulandi)
 
-`04-Telegram_Database_Validator_Bot_V2_CSV_first_fixed.workflow.json`
+n8n Cloud uzerinde su an aktif:
+1. `Telegram Front Door -> V2 Database-check`
+2. `Telegram Database Validator Bot V2` (smart upgraded)
 
-Bu, senin V2 validator'inin duzeltilmis hali:
-- CSV / XLSX / XLS / JSON okur (CSV tercih)
-- Memory Match + AI Agent + Verifier ayni
-- 3 XLSX Telegram ciktisi ayni (Report / Manual Entry / 5UP)
+## Snapshot dosyalari
 
-## Diger dosyalar
+- `05-V2-smart-upgraded.workflow.json` — guncel V2 yedegi
+- `04-...CSV_first_fixed...` — onceki CSV fix
+- `Telegram_Database_Validator_Bot_V2.original.json` — orijinal
 
-- `Telegram_Database_Validator_Bot_V2.original.json` — orijinal V2 yedek
-- `03-...` — basit test akisi (V2 yerine kullanma)
-- `01-...` / `02-...` — deneysel
-
-## Import
-
-1. Eski/simple published workflow'lari Unpublish et
-2. `04-...` dosyasini Import from File ile yukle
-3. Telegram + Google Sheets + OpenAI credential bagla
-4. Publish et
-5. Production webhook:
-   `https://ammartd20.app.n8n.cloud/webhook/Database-check`
-
-## V2'de duzeltilen kritik bug
-
-Eski Extract node `fromJson` idi → Excel/CSV kiriliyordu.
-
-Yeni:
-`File Kind Switch -> Extract CSV/XLSX/XLS/JSON -> Normalize Leads -> Chunk Router -> Memory Match...`
+Detay: `docs/SMART-UPGRADES.md`
