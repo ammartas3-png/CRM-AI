@@ -27,14 +27,14 @@
     },
     {
       "parameters": {
-        "jsCode": "const update = $input.first().json;\nconst sd = $getWorkflowStaticData('global');\n\nif (update.callback_query) {\n  const cb = update.callback_query;\n  const data = String(cb.data || '');\n  const chatId = cb.message?.chat?.id;\n\n  if (data.startsWith('v|')) {\n    const parts = data.split('|');\n    const account = parts[1] || '';\n    const code = parts[2] || '';\n    const STATUS = {\n      ca: 'Call Again', na: 'No Answer 1-5', n5: 'No Answer 5 UP', rc: 'Recall',\n      ni: 'No Interest', np: 'No Potential', wn: 'Wrong Number or Email',\n      dr: 'Denied Registration', keep: 'Keep CRM'\n    };\n    const status = STATUS[code] || code;\n    if (!Array.isArray(sd.humanVotes)) sd.humanVotes = [];\n    sd.humanVotes.push({ account, status, code, chat_id: chatId, at: new Date().toISOString() });\n    if (sd.humanVotes.length > 200) sd.humanVotes = sd.humanVotes.slice(-200);\n    return [{ json: {\n      route: 'vote', callback_id: cb.id, callback_data: data, chat_id: chatId,\n      account, status, code, vote_ack: `Saved: ${account} → ${status}`\n    }}];\n  }\n\n  if (data === 'rules_chat') {\n    sd.mode = 'rules';\n    sd.chatHistory = [];\n    return [{ json: { route: 'rules_enter', callback_id: cb.id, callback_data: data, chat_id: chatId } }];\n  }\n\n  if (data === 'rules_exit') {\n    sd.mode = '';\n    sd.chatHistory = [];\n    sd.pendingProposal = null;\n    return [{ json: { route: 'rules_exit', callback_id: cb.id, callback_data: data, chat_id: chatId } }];\n  }\n\n  if (data === 'database_check') sd.mode = '';\n  return [{ json: {\n    route: 'callback', callback_id: cb.id, callback_data: data, chat_id: chatId,\n    user_id: String(cb.from?.id || '')\n  }}];\n}\n\nconst message = update.message || {};\nconst chatId = message.chat?.id;\nconst text = String(message.text || '').trim();\nconst low = text.toLowerCase();\n\nif (text.startsWith('/start') || low === 'menu' || low === '/menu') {\n  sd.mode = '';\n  return [{ json: { route: 'start', chat_id: chatId } }];\n}\n\nif (message.document) {\n  return [{ json: {\n    route: 'document', chat_id: chatId,\n    file_id: message.document.file_id,\n    file_name: message.document.file_name || 'upload.xlsx',\n    mime_type: message.document.mime_type || ''\n  }}];\n}\n\n// Text menu aliases (if buttons still missing)\nif (low === '1' || low === 'database' || low === 'database check' || low === 'db' || low === 'check') {\n  sd.mode = '';\n  return [{ json: { route: 'callback', callback_id: '', callback_data: 'database_check', chat_id: chatId, from_text: true } }];\n}\nif (low === '2' || low === 'rules' || low === 'rules brain' || low === 'brain' || low === 'kural') {\n  sd.mode = 'rules';\n  sd.chatHistory = [];\n  return [{ json: { route: 'rules_enter', callback_id: '', callback_data: 'rules_chat', chat_id: chatId, from_text: true } }];\n}\n\nif (/^\\/(exit|done|menu)$/i.test(text) || /^exit$/i.test(text)) {\n  sd.mode = '';\n  sd.chatHistory = [];\n  sd.pendingProposal = null;\n  return [{ json: { route: 'rules_exit', chat_id: chatId, text } }];\n}\n\nif (sd.mode === 'rules' && text) {\n  return [{ json: { route: 'rules_msg', chat_id: chatId, text, is_confirm: /^confirm$/i.test(text) } }];\n}\n\nreturn [{ json: { route: 'other', chat_id: chatId, text } }];\n"
+        "jsCode": "const update = $input.first().json;\nconst sd = $getWorkflowStaticData('global');\n\nfunction home() {\n  sd.mode = '';\n  sd.review = null;\n  return { route: 'menu_home', chat_id: arguments[0] };\n}\n\nif (update.callback_query) {\n  const cb = update.callback_query;\n  const data = String(cb.data || '');\n  const chatId = cb.message?.chat?.id;\n  const base = {\n    callback_id: cb.id,\n    callback_data: data,\n    chat_id: chatId,\n    user_id: String(cb.from?.id || ''),\n    ack: 'OK'\n  };\n\n  // Survey votes (from V2)\n  if (data.startsWith('v|')) {\n    const parts = data.split('|');\n    const account = parts[1] || '';\n    const code = parts[2] || '';\n    const STATUS = { ca:'Call Again', na:'No Answer 1-5', n5:'No Answer 5 UP', rc:'Recall', ni:'No Interest', np:'No Potential', wn:'Wrong Number or Email', dr:'Denied Registration', keep:'Keep CRM' };\n    return [{ json: { ...base, route: 'vote', account, status: STATUS[code]||code, code, vote_ack: `Saved: ${account} -> ${STATUS[code]||code}`, ack: 'Saved' } }];\n  }\n\n  if (data === 'm:home' || data === 'm:start') {\n    sd.mode = ''; sd.review = null;\n    return [{ json: { ...base, route: 'menu_home', ack: 'Menu' } }];\n  }\n  if (data === 'm:db') {\n    sd.mode = ''; sd.review = null;\n    return [{ json: { ...base, route: 'menu_db', ack: 'Database check' } }];\n  }\n  if (data === 'm:rules') {\n    sd.mode = ''; sd.review = null;\n    return [{ json: { ...base, route: 'menu_rules', ack: 'Rules' } }];\n  }\n  if (data === 'm:review') {\n    sd.mode = 'review';\n    return [{ json: { ...base, route: 'menu_review_start', ack: 'Review' } }];\n  }\n  if (data === 'm:ask') {\n    sd.mode = 'ask';\n    return [{ json: { ...base, route: 'menu_ask', ack: 'Ask mode' } }];\n  }\n\n  // Review actions\n  if (data === 'rev:ok' || data === 'rev:skip' || data === 'rev:next') {\n    return [{ json: { ...base, route: 'review_next', action: data.slice(4), ack: data === 'rev:ok' ? 'Correct' : 'Next' } }];\n  }\n  if (data === 'rev:bad') {\n    return [{ json: { ...base, route: 'review_wrong', ack: 'Wrong' } }];\n  }\n  if (data === 'rev:exit') {\n    sd.mode = ''; sd.review = null;\n    return [{ json: { ...base, route: 'menu_home', ack: 'Exit review' } }];\n  }\n  if (data.startsWith('fix:')) {\n    const code = data.slice(4);\n    const STATUS = { ca:'Call Again', na:'No Answer 1-5', n5:'No Answer 5 UP', rc:'Recall', ni:'No Interest', np:'No Potential', wn:'Wrong Number or Email', dr:'Denied Registration', mc:'Manual Check', keep:'Keep as-is' };\n    return [{ json: { ...base, route: 'review_fix', fix_code: code, fix_status: STATUS[code]||code, ack: STATUS[code]||code } }];\n  }\n\n  // unknown callback -> home\n  return [{ json: { ...base, route: 'menu_home', ack: 'OK' } }];\n}\n\nconst message = update.message || {};\nconst chatId = message.chat?.id;\nconst text = String(message.text || '').trim();\nconst low = text.toLowerCase();\n\nif (text.startsWith('/start') || low === 'menu') {\n  sd.mode = ''; sd.review = null;\n  return [{ json: { route: 'menu_home', chat_id: chatId } }];\n}\n\nif (message.document) {\n  return [{ json: {\n    route: 'document', chat_id: chatId,\n    file_id: message.document.file_id,\n    file_name: message.document.file_name || 'upload.xlsx',\n    mime_type: message.document.mime_type || ''\n  }}];\n}\n\n// Ask mode: free text comment to match against sheet\nif (sd.mode === 'ask' && text) {\n  if (low === 'exit' || low === '/exit') {\n    sd.mode = '';\n    return [{ json: { route: 'menu_home', chat_id: chatId } }];\n  }\n  return [{ json: { route: 'ask_text', chat_id: chatId, text } }];\n}\n\n// Fallbacks if buttons fail\nif (low === '1' || low === 'database' || low === 'database check') {\n  return [{ json: { route: 'menu_db', chat_id: chatId, callback_id: '' } }];\n}\nif (low === '2' || low === 'rules') {\n  return [{ json: { route: 'menu_rules', chat_id: chatId, callback_id: '' } }];\n}\n\nreturn [{ json: { route: 'menu_home', chat_id: chatId } }];\n"
       },
-      "id": "route",
+      "id": "route-update",
       "name": "Route Update",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        460,
+        260,
         300
       ]
     },
@@ -52,7 +52,7 @@
                 "conditions": [
                   {
                     "leftValue": "={{ $json.route }}",
-                    "rightValue": "start",
+                    "rightValue": "menu_home",
                     "operator": {
                       "type": "string",
                       "operation": "equals"
@@ -62,7 +62,7 @@
                 "combinator": "and"
               },
               "renameOutput": true,
-              "outputKey": "start"
+              "outputKey": "menu_home"
             },
             {
               "conditions": {
@@ -74,7 +74,7 @@
                 "conditions": [
                   {
                     "leftValue": "={{ $json.route }}",
-                    "rightValue": "callback",
+                    "rightValue": "menu_db",
                     "operator": {
                       "type": "string",
                       "operation": "equals"
@@ -84,7 +84,161 @@
                 "combinator": "and"
               },
               "renameOutput": true,
-              "outputKey": "callback"
+              "outputKey": "menu_db"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "menu_rules",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "menu_rules"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "menu_review_start",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "menu_review_start"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "menu_ask",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "menu_ask"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "review_next",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "review_next"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "review_wrong",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "review_wrong"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "review_fix",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "review_fix"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "ask_text",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "ask_text"
             },
             {
               "conditions": {
@@ -129,72 +283,6 @@
               },
               "renameOutput": true,
               "outputKey": "vote"
-            },
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "strict"
-                },
-                "conditions": [
-                  {
-                    "leftValue": "={{ $json.route }}",
-                    "rightValue": "rules_enter",
-                    "operator": {
-                      "type": "string",
-                      "operation": "equals"
-                    }
-                  }
-                ],
-                "combinator": "and"
-              },
-              "renameOutput": true,
-              "outputKey": "rules_enter"
-            },
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "strict"
-                },
-                "conditions": [
-                  {
-                    "leftValue": "={{ $json.route }}",
-                    "rightValue": "rules_msg",
-                    "operator": {
-                      "type": "string",
-                      "operation": "equals"
-                    }
-                  }
-                ],
-                "combinator": "and"
-              },
-              "renameOutput": true,
-              "outputKey": "rules_msg"
-            },
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "strict"
-                },
-                "conditions": [
-                  {
-                    "leftValue": "={{ $json.route }}",
-                    "rightValue": "rules_exit",
-                    "operator": {
-                      "type": "string",
-                      "operation": "equals"
-                    }
-                  }
-                ],
-                "combinator": "and"
-              },
-              "renameOutput": true,
-              "outputKey": "rules_exit"
             }
           ]
         },
@@ -202,30 +290,205 @@
           "fallbackOutput": "extra"
         }
       },
-      "id": "switch",
+      "id": "switch-route",
       "name": "Switch Route",
       "type": "n8n-nodes-base.switch",
-      "typeVersion": 3.2,
+      "typeVersion": 3,
       "position": [
-        680,
+        480,
         300
       ]
     },
     {
       "parameters": {
-        "operation": "sendMessage",
-        "chatId": "={{ $json.chat_id }}",
-        "text": "Welcome!\n\nType 1 = Database check (upload Excel)\nType 2 = Rules brain (Google Sheet rules)\n\nYou can also send an Excel/CSV anytime.",
+        "jsCode": "\nconst chatId = $json.chat_id;\nconst hasCb = !!$json.callback_id;\nreturn [{ json: {\n  chat_id: chatId,\n  callback_id: $json.callback_id || '',\n  ack: $json.ack || 'Menu',\n  has_cb: hasCb,\n  text: \"Choose an option:\",\n  reply_markup: {\n    inline_keyboard: [\n      [{ text: \"Database check\", callback_data: \"m:db\" }],\n      [{ text: \"Rules (Google Sheet)\", callback_data: \"m:rules\" }]\n    ]\n  }\n}}];\n"
+      },
+      "id": "prep-home",
+      "name": "Prep Home",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "home-has-cb-c",
+              "leftValue": "={{ $json.callback_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "home-has-cb",
+      "name": "Home Has CB",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        900,
+        -40
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "callback",
+        "operation": "answerQuery",
+        "queryId": "={{ $json.callback_id }}",
         "additionalFields": {
-          "appendAttribution": false
+          "text": "={{ $json.ack || \"OK\" }}"
         }
       },
-      "id": "send-start",
-      "name": "Send Start",
+      "id": "ans-home-cb",
+      "name": "Ans Home CB",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        720,
+        1100,
+        -120
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "q14sD9Geek2ExOku",
+          "name": "Telegram account"
+        }
+      },
+      "webhookId": "dfe17094-cfa3-4994-82af-2114945283b8",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{$credentials.telegramApi.accessToken}}/sendMessage",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "telegramApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Prep Home').item.json.chat_id, text: $('Prep Home').item.json.text, reply_markup: $('Prep Home').item.json.reply_markup, disable_web_page_preview: true }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "send-home-menu",
+      "name": "Send Home Menu",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1300,
+        0
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "q14sD9Geek2ExOku",
+          "name": "Telegram account"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "\nreturn [{ json: {\n  chat_id: $json.chat_id,\n  callback_id: $json.callback_id || '',\n  ack: 'Send your file',\n  text: \"Database check selected.\\nPlease send your Excel/CSV file now.\",\n  reply_markup: {\n    inline_keyboard: [[{ text: \"Back to menu\", callback_data: \"m:home\" }]]\n  }\n}}];\n"
+      },
+      "id": "prep-db",
+      "name": "Prep DB",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "db-has-cb-c",
+              "leftValue": "={{ $json.callback_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "db-has-cb",
+      "name": "DB Has CB",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        900,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "callback",
+        "operation": "answerQuery",
+        "queryId": "={{ $json.callback_id }}",
+        "additionalFields": {
+          "text": "={{ $json.ack || \"OK\" }}"
+        }
+      },
+      "id": "ans-db-cb",
+      "name": "Ans DB CB",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1100,
+        100
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "q14sD9Geek2ExOku",
+          "name": "Telegram account"
+        }
+      },
+      "webhookId": "ad0e4124-0baf-43bf-931e-e6a59c2973ce",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{$credentials.telegramApi.accessToken}}/sendMessage",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "telegramApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Prep DB').item.json.chat_id, text: $('Prep DB').item.json.text, reply_markup: $('Prep DB').item.json.reply_markup, disable_web_page_preview: true }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "send-db-prompt",
+      "name": "Send DB Prompt",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1300,
         200
       ],
       "credentials": {
@@ -234,22 +497,69 @@
           "name": "Telegram account"
         }
       },
-      "webhookId": "send-start-menu"
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "\nreturn [{ json: {\n  chat_id: $json.chat_id,\n  callback_id: $json.callback_id || '',\n  ack: 'Rules',\n  text: \"Rules - what do you want to do?\",\n  reply_markup: {\n    inline_keyboard: [\n      [{ text: \"Review sheet rules\", callback_data: \"m:review\" }],\n      [{ text: \"Ask about a comment\", callback_data: \"m:ask\" }],\n      [{ text: \"Back\", callback_data: \"m:home\" }]\n    ]\n  }\n}}];\n"
+      },
+      "id": "prep-rules-menu",
+      "name": "Prep Rules Menu",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "rules-has-cb-c",
+              "leftValue": "={{ $json.callback_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "rules-has-cb",
+      "name": "Rules Has CB",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        900,
+        360
+      ]
     },
     {
       "parameters": {
         "resource": "callback",
         "operation": "answerQuery",
         "queryId": "={{ $json.callback_id }}",
-        "additionalFields": {}
+        "additionalFields": {
+          "text": "={{ $json.ack || \"OK\" }}"
+        }
       },
-      "id": "answer-cb",
-      "name": "Answer Callback",
+      "id": "ans-rules-cb",
+      "name": "Ans Rules CB",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        940,
-        280
+        1100,
+        300
       ],
       "credentials": {
         "telegramApi": {
@@ -257,24 +567,29 @@
           "name": "Telegram account"
         }
       },
-      "webhookId": "54b18f0c-027c-4fb6-8c99-1e0f7b5785d8"
+      "webhookId": "4682abd5-4bfb-48f3-9586-56714a1c14bf",
+      "continueOnFail": true
     },
     {
       "parameters": {
-        "operation": "sendMessage",
-        "chatId": "={{ $('Route Update').item.json.chat_id }}",
-        "text": "Please send your database file (.csv preferred, or .xlsx).",
-        "additionalFields": {
-          "appendAttribution": false
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{$credentials.telegramApi.accessToken}}/sendMessage",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "telegramApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Prep Rules Menu').item.json.chat_id, text: $('Prep Rules Menu').item.json.text, reply_markup: $('Prep Rules Menu').item.json.reply_markup, disable_web_page_preview: true }) }}",
+        "options": {
+          "timeout": 30000
         }
       },
-      "id": "ask-file",
-      "name": "Ask File",
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
+      "id": "send-rules-menu",
+      "name": "Send Rules Menu",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
-        1160,
-        280
+        1300,
+        400
       ],
       "credentials": {
         "telegramApi": {
@@ -282,7 +597,699 @@
           "name": "Telegram account"
         }
       },
-      "webhookId": "f1fe3ae3-9afc-416b-8380-c4178aadbae5"
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst sd = $getWorkflowStaticData('global');\nsd.mode = 'ask';\nreturn [{ json: {\n  chat_id: $json.chat_id,\n  callback_id: $json.callback_id || '',\n  ack: 'Ask mode',\n  text: \"Ask mode ON.\\nPaste one CRM comment/phrase and I will show matching Google Sheet rows.\\n\\nOr tap Back.\",\n  reply_markup: {\n    inline_keyboard: [[{ text: \"Back to Rules\", callback_data: \"m:rules\" }]]\n  }\n}}];\n"
+      },
+      "id": "prep-ask",
+      "name": "Prep Ask",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "ask-has-cb-c",
+              "leftValue": "={{ $json.callback_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ask-has-cb",
+      "name": "Ask Has CB",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        900,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "callback",
+        "operation": "answerQuery",
+        "queryId": "={{ $json.callback_id }}",
+        "additionalFields": {
+          "text": "={{ $json.ack || \"OK\" }}"
+        }
+      },
+      "id": "ans-ask-cb",
+      "name": "Ans Ask CB",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1100,
+        500
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "q14sD9Geek2ExOku",
+          "name": "Telegram account"
+        }
+      },
+      "webhookId": "dc5f0c4e-c4d7-4ffa-a382-81880437cb53",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{$credentials.telegramApi.accessToken}}/sendMessage",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "telegramApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Prep Ask').item.json.chat_id, text: $('Prep Ask').item.json.text, reply_markup: $('Prep Ask').item.json.reply_markup, disable_web_page_preview: true }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "send-ask-prompt",
+      "name": "Send Ask Prompt",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1300,
+        600
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "q14sD9Geek2ExOku",
+          "name": "Telegram account"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "\nreturn [{ json: {\n  chat_id: $json.chat_id,\n  callback_id: $json.callback_id || '',\n  ack: 'Loading sheet',\n  _go_sheet: true\n}}];\n"
+      },
+      "id": "prep-review-start",
+      "name": "Prep Review Start",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "rev-start-has-cb-c",
+              "leftValue": "={{ $json.callback_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "rev-start-has-cb",
+      "name": "Review Start Has CB",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        900,
+        760
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "callback",
+        "operation": "answerQuery",
+        "queryId": "={{ $json.callback_id }}",
+        "additionalFields": {
+          "text": "={{ $json.ack || \"OK\" }}"
+        }
+      },
+      "id": "ans-rev-start",
+      "name": "Ans Review Start",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1100,
+        700
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "q14sD9Geek2ExOku",
+          "name": "Telegram account"
+        }
+      },
+      "webhookId": "903b0605-6690-4d48-be1d-3eaffa7e8bb0",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "17m6No_sKILzLs5ZjmND0FykwkjFBLvWhiJP6NCcKq8E",
+          "mode": "list",
+          "cachedResultName": "CRM_AI_Rules"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1"
+        },
+        "options": {}
+      },
+      "id": "get-sheet-review",
+      "name": "Get Sheet For Review",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1100,
+        860
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "onoiTia5zEmBSr7R",
+          "name": "Google Sheets account 2"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const sd = $getWorkflowStaticData('global');\nconst chatId = (sd._rulesMsg && sd._rulesMsg.chat_id) || $('Prep Review Start').item.json.chat_id || $('Route Update').item.json.chat_id;\nconst rows = $input.all().map(i => i.json).filter(j => j && (j.trigger_phrase || j.Trigger));\nconst active = rows.filter(j => String(j.active ?? 'true').toLowerCase() !== 'false');\nconst queue = active.map((j, idx) => ({\n  row: j.row_number ?? j.rowNumber ?? j.row ?? (idx + 2),\n  trigger: String(j.trigger_phrase || j.Trigger || '').trim(),\n  status: String(j.suggested_status || j.first_status || '').trim(),\n  group: String(j.keyword_group || 'other').trim() || 'other',\n  repeat: String(j.repeat_logic || '').trim(),\n  first: String(j.first_status || '').trim(),\n  again: String(j.repeat_status || '').trim(),\n  source: String(j.source || '').trim(),\n}));\nsd.review = { i: 0, chat_id: chatId, total: queue.length };\nsd.reviewQueue = queue;\nif (!queue.length) {\n  return [{ json: {\n    chat_id: chatId,\n    text: 'No active sheet rules found.',\n    reply_markup: { inline_keyboard: [[{ text: 'Back', callback_data: 'm:rules' }]] }\n  }}];\n}\nconst r = queue[0];\nconst text =\n`Sheet review 1/${queue.length}\\n` +\n`Row ${r.row} [${r.group}]\\n` +\n`Trigger: \"${r.trigger}\"\\n` +\n`Suggested: ${r.status || '-'}\\n` +\n(r.repeat ? `Repeat: ${r.repeat} (${r.first || '?'} -> ${r.again || '?'})\\n` : '') +\n(r.source ? `Source: ${r.source}\\n` : '') +\n`\\nIs this rule correct?`;\nreturn [{ json: {\n  chat_id: chatId,\n  text,\n  reply_markup: {\n    inline_keyboard: [\n      [{ text: 'Correct', callback_data: 'rev:ok' }, { text: 'Wrong', callback_data: 'rev:bad' }],\n      [{ text: 'Skip', callback_data: 'rev:skip' }, { text: 'Exit', callback_data: 'rev:exit' }]\n    ]\n  }\n}}];\n"
+      },
+      "id": "build-review-queue",
+      "name": "Build Review Queue",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        860
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{$credentials.telegramApi.accessToken}}/sendMessage",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "telegramApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Build Review Queue').item.json.chat_id, text: $('Build Review Queue').item.json.text, reply_markup: $('Build Review Queue').item.json.reply_markup, disable_web_page_preview: true }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "send-review-card",
+      "name": "Send Review Card",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1520,
+        860
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "q14sD9Geek2ExOku",
+          "name": "Telegram account"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst sd = $getWorkflowStaticData('global');\nconst j = $input.first().json;\nsd._rulesMsg = { chat_id: j.chat_id };\nreturn [{ json: j }];\n"
+      },
+      "id": "seed-review-chat",
+      "name": "Seed Review Chat",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        860
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const sd = $getWorkflowStaticData('global');\nconst chatId = $json.chat_id;\nconst action = $json.action || 'next';\nconst queue = Array.isArray(sd.reviewQueue) ? sd.reviewQueue : [];\nif (!sd.review) sd.review = { i: 0, chat_id: chatId, total: queue.length };\n// advance\nsd.review.i = Math.min((sd.review.i || 0) + 1, queue.length);\nconst i = sd.review.i;\nif (i >= queue.length) {\n  sd.mode = '';\n  sd.review = null;\n  return [{ json: {\n    chat_id: chatId,\n    callback_id: $json.callback_id || '',\n    ack: $json.ack || 'Done',\n    text: `Review finished. Checked ${queue.length} sheet rules.`,\n    reply_markup: {\n      inline_keyboard: [\n        [{ text: 'Rules menu', callback_data: 'm:rules' }],\n        [{ text: 'Main menu', callback_data: 'm:home' }]\n      ]\n    }\n  }}];\n}\nconst r = queue[i];\nconst text =\n`Sheet review ${i+1}/${queue.length}\\n` +\n`Row ${r.row} [${r.group}]\\n` +\n`Trigger: \"${r.trigger}\"\\n` +\n`Suggested: ${r.status || '-'}\\n` +\n(r.repeat ? `Repeat: ${r.repeat} (${r.first || '?'} -> ${r.again || '?'})\\n` : '') +\n`\\nIs this rule correct?`;\nreturn [{ json: {\n  chat_id: chatId,\n  callback_id: $json.callback_id || '',\n  ack: $json.ack || 'Next',\n  text,\n  reply_markup: {\n    inline_keyboard: [\n      [{ text: 'Correct', callback_data: 'rev:ok' }, { text: 'Wrong', callback_data: 'rev:bad' }],\n      [{ text: 'Skip', callback_data: 'rev:skip' }, { text: 'Exit', callback_data: 'rev:exit' }]\n    ]\n  }\n}}];\n"
+      },
+      "id": "prep-review-next",
+      "name": "Prep Review Next",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        1100
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "next-has-cb-c",
+              "leftValue": "={{ $json.callback_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "next-has-cb",
+      "name": "Next Has CB",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        900,
+        1060
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "callback",
+        "operation": "answerQuery",
+        "queryId": "={{ $json.callback_id }}",
+        "additionalFields": {
+          "text": "={{ $json.ack || \"OK\" }}"
+        }
+      },
+      "id": "ans-next-cb",
+      "name": "Ans Next CB",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1100,
+        1000
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "q14sD9Geek2ExOku",
+          "name": "Telegram account"
+        }
+      },
+      "webhookId": "92437d9a-bd67-4ff8-8e44-7089a73e7582",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{$credentials.telegramApi.accessToken}}/sendMessage",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "telegramApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Prep Review Next').item.json.chat_id, text: $('Prep Review Next').item.json.text, reply_markup: $('Prep Review Next').item.json.reply_markup, disable_web_page_preview: true }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "send-next-card",
+      "name": "Send Next Card",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1300,
+        1100
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "q14sD9Geek2ExOku",
+          "name": "Telegram account"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const sd = $getWorkflowStaticData('global');\nconst chatId = $json.chat_id;\nconst queue = sd.reviewQueue || [];\nconst i = (sd.review && sd.review.i) || 0;\nconst r = queue[i] || {};\nreturn [{ json: {\n  chat_id: chatId,\n  callback_id: $json.callback_id || '',\n  ack: 'Choose correct status',\n  text: `Row ${r.row}: \"${r.trigger}\"\\nCurrent suggested: ${r.status || '-'}\\n\\nWhat should suggested_status be?`,\n  reply_markup: {\n    inline_keyboard: [\n      [{ text: 'Call Again', callback_data: 'fix:ca' }, { text: 'Recall', callback_data: 'fix:rc' }],\n      [{ text: 'No Answer 1-5', callback_data: 'fix:na' }, { text: 'No Answer 5UP', callback_data: 'fix:n5' }],\n      [{ text: 'No Interest', callback_data: 'fix:ni' }, { text: 'No Potential', callback_data: 'fix:np' }],\n      [{ text: 'Wrong Number', callback_data: 'fix:wn' }, { text: 'Denied Reg', callback_data: 'fix:dr' }],\n      [{ text: 'Manual Check', callback_data: 'fix:mc' }, { text: 'Keep as-is', callback_data: 'fix:keep' }],\n      [{ text: 'Cancel / Skip', callback_data: 'rev:skip' }]\n    ]\n  }\n}}];\n"
+      },
+      "id": "prep-wrong",
+      "name": "Prep Wrong Picker",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        1300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "wrong-has-cb-c",
+              "leftValue": "={{ $json.callback_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "wrong-has-cb",
+      "name": "Wrong Has CB",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        900,
+        1260
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "callback",
+        "operation": "answerQuery",
+        "queryId": "={{ $json.callback_id }}",
+        "additionalFields": {
+          "text": "={{ $json.ack || \"OK\" }}"
+        }
+      },
+      "id": "ans-wrong-cb",
+      "name": "Ans Wrong CB",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1100,
+        1200
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "q14sD9Geek2ExOku",
+          "name": "Telegram account"
+        }
+      },
+      "webhookId": "cda7ce3d-4f20-46da-9e2b-af92fa12272b",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{$credentials.telegramApi.accessToken}}/sendMessage",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "telegramApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Prep Wrong Picker').item.json.chat_id, text: $('Prep Wrong Picker').item.json.text, reply_markup: $('Prep Wrong Picker').item.json.reply_markup, disable_web_page_preview: true }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "send-wrong-picker",
+      "name": "Send Wrong Picker",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1300,
+        1300
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "q14sD9Geek2ExOku",
+          "name": "Telegram account"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const sd = $getWorkflowStaticData('global');\nconst chatId = $json.chat_id;\nconst queue = sd.reviewQueue || [];\nconst i = (sd.review && sd.review.i) || 0;\nconst r = queue[i] || {};\nconst fix = $json.fix_status || '';\nconst code = $json.fix_code || '';\n\n// save draft fields for sheet append\nconst draft = {\n  chat_id: chatId,\n  callback_id: $json.callback_id || '',\n  ack: 'Saved fix',\n  type: 'sheet_rule_correction',\n  account_no: `row_${r.row}`,\n  old_status: r.status || '',\n  new_status: fix,\n  validation_result: 'Human Sheet Fix',\n  decision_source: 'telegram_review',\n  matched_keyword: r.trigger || '',\n  confidence: 'Human',\n  reason: `Sheet row ${r.row} trigger \"${r.trigger}\" marked wrong; correct status=${fix}`,\n  example_comment: r.group || '',\n};\n\n// advance after fix\nsd.review.i = Math.min(i + 1, queue.length);\nconst ni = sd.review.i;\nif (ni >= queue.length) {\n  sd.mode = ''; sd.review = null;\n  return [{ json: {\n    ...draft,\n    text: `Saved correction for row ${r.row} -> ${fix}\\n\\nReview finished (${queue.length} rules).`,\n    reply_markup: { inline_keyboard: [[{ text: 'Main menu', callback_data: 'm:home' }]] }\n  }}];\n}\nconst n = queue[ni];\nconst text =\n`Saved: row ${r.row} -> ${fix}\\n\\n` +\n`Sheet review ${ni+1}/${queue.length}\\n` +\n`Row ${n.row} [${n.group}]\\n` +\n`Trigger: \"${n.trigger}\"\\n` +\n`Suggested: ${n.status || '-'}\\n\\n` +\n`Is this rule correct?`;\nreturn [{ json: {\n  ...draft,\n  text,\n  reply_markup: {\n    inline_keyboard: [\n      [{ text: 'Correct', callback_data: 'rev:ok' }, { text: 'Wrong', callback_data: 'rev:bad' }],\n      [{ text: 'Skip', callback_data: 'rev:skip' }, { text: 'Exit', callback_data: 'rev:exit' }]\n    ]\n  }\n}}];\n"
+      },
+      "id": "prep-fix",
+      "name": "Prep Fix Save",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        1500
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "fix-has-cb-c",
+              "leftValue": "={{ $json.callback_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "fix-has-cb",
+      "name": "Fix Has CB",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        900,
+        1460
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "callback",
+        "operation": "answerQuery",
+        "queryId": "={{ $json.callback_id }}",
+        "additionalFields": {
+          "text": "={{ $json.ack || \"OK\" }}"
+        }
+      },
+      "id": "ans-fix-cb",
+      "name": "Ans Fix CB",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1100,
+        1400
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "q14sD9Geek2ExOku",
+          "name": "Telegram account"
+        }
+      },
+      "webhookId": "f9bc8a72-b939-46dd-abe3-1a87c1b9db5a",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "17m6No_sKILzLs5ZjmND0FykwkjFBLvWhiJP6NCcKq8E",
+          "mode": "list",
+          "cachedResultName": "CRM_AI_Rules"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Decision_Memory",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "type": "={{ $json.type }}",
+            "account_no": "={{ $json.account_no }}",
+            "old_status": "={{ $json.old_status }}",
+            "new_status": "={{ $json.new_status }}",
+            "validation_result": "={{ $json.validation_result }}",
+            "decision_source": "={{ $json.decision_source }}",
+            "matched_keyword": "={{ $json.matched_keyword }}",
+            "confidence": "={{ $json.confidence }}",
+            "reason": "={{ $json.reason }}",
+            "example_comment": "={{ $json.example_comment }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "append-fix",
+      "name": "Append Sheet Fix",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1300,
+        1450
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "onoiTia5zEmBSr7R",
+          "name": "Google Sheets account 2"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{$credentials.telegramApi.accessToken}}/sendMessage",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "telegramApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Prep Fix Save').item.json.chat_id, text: $('Prep Fix Save').item.json.text, reply_markup: $('Prep Fix Save').item.json.reply_markup, disable_web_page_preview: true }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "send-after-fix",
+      "name": "Send After Fix",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1520,
+        1500
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "q14sD9Geek2ExOku",
+          "name": "Telegram account"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst sd=$getWorkflowStaticData('global');\nsd._askText=$json.text;\nsd._askChat=$json.chat_id;\nreturn [{json:$json}];\n"
+      },
+      "id": "seed-ask",
+      "name": "Seed Ask",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        1700
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "17m6No_sKILzLs5ZjmND0FykwkjFBLvWhiJP6NCcKq8E",
+          "mode": "list",
+          "cachedResultName": "CRM_AI_Rules"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1"
+        },
+        "options": {}
+      },
+      "id": "get-sheet-ask",
+      "name": "Get Sheet For Ask",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        900,
+        1700
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "onoiTia5zEmBSr7R",
+          "name": "Google Sheets account 2"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const sd = $getWorkflowStaticData('global');\nconst sd2=$getWorkflowStaticData('global');\nconst chatId = sd2._askChat || $json.chat_id;\nconst userText = String(sd2._askText || $json.text || '');\nfunction fold(t){return String(t||'').toLowerCase().replace(/ı/g,'i').replace(/ş/g,'s').replace(/ğ/g,'g').replace(/ç/g,'c').replace(/ö/g,'o').replace(/ü/g,'u').replace(/['\"`]/g,'').replace(/[;,.\\|]+/g,' ').replace(/\\s+/g,' ').trim();}\nconst rows = $input.all().map(i=>i.json).filter(j=>j && (j.trigger_phrase||j.Trigger));\nconst active = rows.filter(j=>String(j.active??'true').toLowerCase()!=='false');\nconst norm = fold(userText);\nconst hits=[];\nfor (const j of active){\n  const trigger=String(j.trigger_phrase||j.Trigger||'').trim();\n  const t=fold(trigger);\n  if(t.length>=2 && norm.includes(t)){\n    hits.push({\n      row: j.row_number ?? j.row ?? '?',\n      trigger, status:String(j.suggested_status||j.first_status||'').trim(),\n      group:String(j.keyword_group||'').trim(),\n      len:t.length\n    });\n  }\n}\nhits.sort((a,b)=>b.len-a.len);\nconst top=hits.slice(0,8);\nlet text;\nif(!top.length){\n  text=`No sheet trigger matched:\\n\"${userText}\"\\nScanned active: ${active.length}`;\n} else {\n  text=`Sheet matches for:\\n\"${userText}\"\\n\\n`+top.map((h,i)=>`${i+1}) Row ${h.row} [${h.group}]\\n   \"${h.trigger}\" -> ${h.status}`).join('\\n\\n');\n}\nreturn [{ json: {\n  chat_id: chatId,\n  text: text.slice(0,3500),\n  reply_markup: {\n    inline_keyboard: [\n      [{ text: 'Ask another', callback_data: 'm:ask' }],\n      [{ text: 'Review rules', callback_data: 'm:review' }],\n      [{ text: 'Back', callback_data: 'm:rules' }]\n    ]\n  }\n}}];\n"
+      },
+      "id": "match-ask",
+      "name": "Match Ask Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        1700
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{$credentials.telegramApi.accessToken}}/sendMessage",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "telegramApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Match Ask Text').item.json.chat_id, text: $('Match Ask Text').item.json.text, reply_markup: $('Match Ask Text').item.json.reply_markup, disable_web_page_preview: true }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "send-ask-result",
+      "name": "Send Ask Result",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1300,
+        1700
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "q14sD9Geek2ExOku",
+          "name": "Telegram account"
+        }
+      },
+      "continueOnFail": true
     },
     {
       "parameters": {
@@ -400,7 +1407,7 @@
       "parameters": {
         "operation": "sendMessage",
         "chatId": "={{ $('Route Update').item.json.chat_id }}",
-        "text": "Validation started. V2 will send the Excel reports here when ready.",
+        "text": "Upload started in V2. Reports will arrive here.",
         "additionalFields": {
           "appendAttribution": false
         }
@@ -420,31 +1427,6 @@
         }
       },
       "webhookId": "56e881d2-e2e4-4d5a-b1f6-5a941571c3c1"
-    },
-    {
-      "parameters": {
-        "operation": "sendMessage",
-        "chatId": "={{ $json.chat_id }}",
-        "text": "Type /start\nOr type 1 (Database check) / 2 (Rules brain)\nOr send an Excel/CSV anytime.",
-        "additionalFields": {
-          "appendAttribution": false
-        }
-      },
-      "id": "other",
-      "name": "Other Hint",
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
-      "position": [
-        940,
-        680
-      ],
-      "credentials": {
-        "telegramApi": {
-          "id": "q14sD9Geek2ExOku",
-          "name": "Telegram account"
-        }
-      },
-      "webhookId": "0f53b218-618f-4ea0-aa37-1be6b7f2c6c6"
     },
     {
       "parameters": {
@@ -542,514 +1524,6 @@
         }
       },
       "continueOnFail": true
-    },
-    {
-      "parameters": {
-        "resource": "callback",
-        "operation": "answerQuery",
-        "queryId": "={{ $json.callback_id }}",
-        "additionalFields": {
-          "text": "Rules brain opened"
-        }
-      },
-      "id": "ans-rules-enter",
-      "name": "Answer Rules Enter",
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
-      "position": [
-        940,
-        900
-      ],
-      "credentials": {
-        "telegramApi": {
-          "id": "q14sD9Geek2ExOku",
-          "name": "Telegram account"
-        }
-      },
-      "webhookId": "3190b38b-bdcf-4bf7-87d5-9fd5625a1386"
-    },
-    {
-      "parameters": {
-        "operation": "sendMessage",
-        "chatId": "={{ $json.chat_id }}",
-        "text": "Rules brain ON - Google Sheet browser\n\nType one of these:\nliste\ngrup no_answer\nsayfa 1\nsatir 65\nara busy\nhelp\nexit\n\nOr paste a comment to see matching sheet rows.",
-        "additionalFields": {
-          "appendAttribution": false
-        }
-      },
-      "id": "rules-welcome",
-      "name": "Rules Welcome",
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
-      "position": [
-        1160,
-        900
-      ],
-      "credentials": {
-        "telegramApi": {
-          "id": "q14sD9Geek2ExOku",
-          "name": "Telegram account"
-        }
-      },
-      "webhookId": "rules-welcome"
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose"
-          },
-          "conditions": [
-            {
-              "id": "has-cb",
-              "leftValue": "={{ $json.callback_id }}",
-              "rightValue": "",
-              "operator": {
-                "type": "string",
-                "operation": "notEmpty"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "exit-has-cb",
-      "name": "Exit Has Callback",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        720,
-        1100
-      ]
-    },
-    {
-      "parameters": {
-        "resource": "callback",
-        "operation": "answerQuery",
-        "queryId": "={{ $json.callback_id }}",
-        "additionalFields": {
-          "text": "Exited"
-        }
-      },
-      "id": "ans-rules-exit",
-      "name": "Answer Rules Exit",
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
-      "position": [
-        940,
-        1100
-      ],
-      "credentials": {
-        "telegramApi": {
-          "id": "q14sD9Geek2ExOku",
-          "name": "Telegram account"
-        }
-      },
-      "webhookId": "4269f33a-e5b0-4770-bea5-4327fef12551"
-    },
-    {
-      "parameters": {
-        "operation": "sendMessage",
-        "chatId": "={{ $json.chat_id }}",
-        "text": "Left Rules brain. /start for the menu.",
-        "additionalFields": {
-          "appendAttribution": false
-        }
-      },
-      "id": "rules-exit-msg",
-      "name": "Rules Exit Msg",
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
-      "position": [
-        1160,
-        1100
-      ],
-      "credentials": {
-        "telegramApi": {
-          "id": "q14sD9Geek2ExOku",
-          "name": "Telegram account"
-        }
-      },
-      "webhookId": "aa1c2c98-6997-4b01-a8a7-6781c0bd82b7"
-    },
-    {
-      "parameters": {
-        "jsCode": "const r = $input.first().json;\nconst sd = $getWorkflowStaticData('global');\nsd._rulesMsg = { chat_id: r.chat_id, text: r.text, is_confirm: !!r.is_confirm };\nreturn [{ json: { ...r, _seed: true } }];\n"
-      },
-      "id": "seed-rules-msg",
-      "name": "Seed Rules Msg",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        720,
-        1300
-      ]
-    },
-    {
-      "parameters": {
-        "documentId": {
-          "__rl": true,
-          "value": "17m6No_sKILzLs5ZjmND0FykwkjFBLvWhiJP6NCcKq8E",
-          "mode": "list",
-          "cachedResultName": "CRM_AI_Rules"
-        },
-        "sheetName": {
-          "__rl": true,
-          "value": "gid=0",
-          "mode": "list",
-          "cachedResultName": "Sheet1"
-        },
-        "options": {}
-      },
-      "id": "get-rules-sheet",
-      "name": "Get Rules Sheet",
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.7,
-      "position": [
-        940,
-        1300
-      ],
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "onoiTia5zEmBSr7R",
-          "name": "Google Sheets account 2"
-        }
-      },
-      "continueOnFail": true
-    },
-    {
-      "parameters": {
-        "jsCode": "const sd = $getWorkflowStaticData('global');\nconst seed = sd._rulesMsg || $('Route Update').item.json;\nconst rows = $input.all().map(i => i.json).filter(j => j && !j._seed && (j.trigger_phrase || j.Trigger || j['account no'] === undefined));\nconst usable = $input.all().map(i => i.json).filter(j => j && (j.trigger_phrase || j.Trigger));\nif (!usable.length) {\n  return [{ json: { chat_id: seed.chat_id, text: seed.text, is_confirm: seed.is_confirm, trigger_phrase: '', _no_sheet: true } }];\n}\nreturn usable.map(j => ({ json: { ...j, chat_id: seed.chat_id, text: seed.text, is_confirm: seed.is_confirm } }));\n"
-      },
-      "id": "after-rules-sheet",
-      "name": "After Rules Sheet",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1050,
-        1300
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "const sd = $getWorkflowStaticData('global');\nconst route = sd._rulesMsg || $('Route Update').item.json;\nconst chatId = route.chat_id;\nconst userText = String(route.text || '').trim();\nconst isConfirm = !!route.is_confirm;\n\nfunction fold(text) {\n  return String(text || '')\n    .toLowerCase()\n    .replace(/ı/g, 'i').replace(/ş/g, 's').replace(/ğ/g, 'g')\n    .replace(/ç/g, 'c').replace(/ö/g, 'o').replace(/ü/g, 'u')\n    .replace(/[''`\"]/g, '')\n    .replace(/[;,.\\|]+/g, ' ')\n    .replace(/\\s+/g, ' ')\n    .trim();\n}\n\nconst sheetRows = $input.all().map(i => i.json).filter(j => j && (j.trigger_phrase || j.Trigger));\nconst active = sheetRows.filter(j => String(j.active ?? j.Active ?? 'true').toLowerCase() !== 'false');\n\nfunction rowMeta(j, idx) {\n  return {\n    row: j.row_number ?? j.rowNumber ?? j.__rowNum__ ?? j.row ?? (idx + 2),\n    trigger: String(j.trigger_phrase || j.Trigger || '').trim(),\n    status: String(j.suggested_status || j.Suggested || j.first_status || '').trim(),\n    group: String(j.keyword_group || j.group || '').trim() || 'other',\n    repeat: String(j.repeat_logic || '').trim(),\n    first: String(j.first_status || '').trim(),\n    again: String(j.repeat_status || '').trim(),\n    approved: String(j.human_approved || j.reviewed || j.approved || '').trim(),\n    source: String(j.source || j.origin || j.created_by || '').trim(),\n    active: String(j.active ?? j.Active ?? 'true').trim(),\n    when: String(j.when_to_use || '').trim(),\n    whenNot: String(j.when_not_to_use || '').trim(),\n    intent: String(j.intent || '').trim(),\n  };\n}\n\nconst allMeta = sheetRows.map((j, i) => rowMeta(j, i));\nconst activeMeta = active.map((j, i) => rowMeta(j, i));\n\nfunction formatHit(h, i) {\n  let s = `${i + 1}) Row ${h.row} [${h.group}]\\n   \"${h.trigger}\" → ${h.status || '?'}`;\n  if (h.repeat) s += `\\n   repeat: ${h.repeat}` + (h.first || h.again ? ` (${h.first || '?'} → ${h.again || '?'})` : '');\n  if (h.source) s += `\\n   source: ${h.source}`;\n  if (h.approved) s += `\\n   approved: ${h.approved}`;\n  if (String(h.active).toLowerCase() === 'false') s += `\\n   ACTIVE: false`;\n  return s;\n}\n\nfunction formatDetail(h) {\n  return (\n`Sheet row ${h.row}\ngroup: ${h.group}\ntrigger: \"${h.trigger}\"\nsuggested_status: ${h.status || '-'}\nfirst_status: ${h.first || '-'}\nrepeat_status: ${h.again || '-'}\nrepeat_logic: ${h.repeat || '-'}\nactive: ${h.active || '-'}\nsource: ${h.source || '-'}\napproved: ${h.approved || '-'}\nintent: ${h.intent || '-'}\nwhen: ${h.when || '-'}\nwhen_not: ${h.whenNot || '-'}`\n  );\n}\n\nfunction reply(text) {\n  if (!Array.isArray(sd.chatHistory)) sd.chatHistory = [];\n  sd.chatHistory.push({ role: 'user', content: userText });\n  sd.chatHistory.push({ role: 'assistant', content: String(text).slice(0, 800) });\n  if (sd.chatHistory.length > 12) sd.chatHistory = sd.chatHistory.slice(-12);\n  return [{ json: { chat_id: chatId, branch: 'reply', reply_text: String(text).slice(0, 3500) } }];\n}\n\n// CONFIRM\nif (isConfirm) {\n  const prop = sd.pendingProposal;\n  if (!prop) return reply('No pending draft. Ask to change a SHEET rule first, then CONFIRM.');\n  return [{ json: {\n    chat_id: chatId, branch: 'confirm',\n    account_no: prop.id || 'sheet_rule_draft', old_status: '',\n    new_status: prop.expected_status || '', validation_result: 'Sheet Rule Draft',\n    decision_source: 'rules_brain_sheet', matched_keyword: prop.id || '',\n    confidence: 'Human', reason: String(prop.summary || '').slice(0, 500),\n    example_comment: String(prop.example || '').slice(0, 280), type: 'sheet_rule_draft',\n    reply_text: `Sheet rule draft saved.\\n\\n${String(prop.summary || '').slice(0, 1200)}`\n  }}];\n}\n\nconst low = userText.toLowerCase().trim();\n\n// HELP / MENU for sheet browsing\nif (/^(help|yardim|yardım|komut|commands|menu)$/i.test(low)) {\n  return reply(\n`Google Sheet kural gezgini — yorum şart değil.\n\n• liste — gruplara göre özet\n• grup no_answer — o gruptaki kurallar\n• sayfa 1 — tüm aktif kurallar (20’şer)\n• satir 65 — tek satır detay\n• ara no money — trigger ara\n• yorum yapıştır — hangi satırlar eşleşir\n• exit — çık`\n  );\n}\n\n// LIST groups summary\nif (/^(liste|list|sheet|kurallar|özet|ozet)$/i.test(low)) {\n  const byGroup = {};\n  for (const h of activeMeta) byGroup[h.group] = (byGroup[h.group] || 0) + 1;\n  const lines = Object.entries(byGroup).sort((a,b)=>b[1]-a[1])\n    .map(([g,c], i) => `${i+1}. ${g}: ${c}`);\n  return reply(\n`Google Sheet (CRM_AI_Rules)\\nActive: ${activeMeta.length} / total ${allMeta.length}\\n\\n` +\nlines.join('\\n') +\n`\\n\\nSonraki: grup <ad>   örn: grup no_answer\\nveya: sayfa 1`\n  );\n}\n\n// GROUP listing: \"grup no_answer\" / \"group rejection\" / \"liste no_answer\"\nlet grup = userText.match(/^(grup|group|liste|list)\\s+([A-Za-z0-9_\\- ]+)$/i);\nif (grup) {\n  const gq = fold(grup[2]);\n  if (!['liste','list','sheet','kurallar','ozet','özet'].includes(gq)) {\n    const hits = activeMeta.filter(h => fold(h.group) === gq || fold(h.group).includes(gq));\n    if (!hits.length) {\n      const groups = [...new Set(activeMeta.map(h => h.group))].sort();\n      return reply(`Grup bulunamadı: \"${grup[2]}\"\\n\\nGruplar:\\n` + groups.map(g=>`• ${g}`).join('\\n'));\n    }\n    const top = hits.slice(0, 20);\n    return reply(\n`Grup \"${hits[0].group}\" — ${hits.length} kural (showing ${top.length}):\\n\\n` +\ntop.map(formatHit).join('\\n\\n') +\n(hits.length > 20 ? `\\n\\n… +${hits.length-20} more. Use: ara <kelime>` : '')\n    );\n  }\n}\n\n// PAGE browse all active: \"sayfa 1\" / \"page 2\" / \"hepsi\"\nlet page = 1;\nconst pageMatch = userText.match(/^(sayfa|page|hepsi|all)\\s*(\\d+)?$/i);\nif (pageMatch) {\n  page = Math.max(1, parseInt(pageMatch[2] || '1', 10) || 1);\n  const PAGE = 15;\n  const start = (page - 1) * PAGE;\n  const slice = activeMeta.slice(start, start + PAGE);\n  const totalPages = Math.max(1, Math.ceil(activeMeta.length / PAGE));\n  if (!slice.length) return reply(`Sayfa ${page} boş. Toplam sayfa: ${totalPages}`);\n  return reply(\n`Sheet aktif kurallar — sayfa ${page}/${totalPages} (${activeMeta.length} total)\\n\\n` +\nslice.map(formatHit).join('\\n\\n') +\n`\\n\\nNext: sayfa ${Math.min(totalPages, page+1)}`\n  );\n}\n\n// ROW detail: \"satir 65\" / \"row 65\" / \"satır 65\"\nconst rowMatch = userText.match(/^(satir|satır|row|#)\\s*(\\d+)$/i);\nif (rowMatch) {\n  const want = String(parseInt(rowMatch[2], 10));\n  const hit = allMeta.find(h => String(h.row) === want) ||\n    allMeta.find(h => String(h.row) === rowMatch[2]);\n  // also allow index if row_number missing: treat as 1-based among sheetRows\n  const byIndex = !hit && sheetRows[parseInt(rowMatch[2],10) - 1]\n    ? rowMeta(sheetRows[parseInt(rowMatch[2],10) - 1], parseInt(rowMatch[2],10) - 1)\n    : null;\n  const h = hit || byIndex;\n  if (!h) return reply(`Row ${want} bulunamadı. Toplam satır: ${allMeta.length}`);\n  return reply(formatDetail(h));\n}\n\n// SEARCH\nconst ara = userText.match(/^(ara|search|bul)\\s+(.+)$/i);\nif (ara) {\n  const q = fold(ara[2]);\n  const hits = activeMeta.filter(h =>\n    fold(h.trigger).includes(q) || fold(h.status).includes(q) || fold(h.group).includes(q) || fold(h.intent).includes(q)\n  );\n  hits.sort((a,b) => fold(a.trigger).length - fold(b.trigger).length);\n  const top = hits.slice(0, 15);\n  return reply(\n    top.length\n      ? `Ara \"${ara[2]}\" → ${hits.length} hit, showing ${top.length}:\\n\\n` + top.map(formatHit).join('\\n\\n')\n      : `Sheet’te \"${ara[2]}\" yok. Active: ${activeMeta.length}`\n  );\n}\n\n// MATCH comment against triggers\nconst normUser = fold(userText);\nconst matches = [];\nfor (const h of activeMeta) {\n  const t = fold(h.trigger);\n  if (t.length < 2) continue;\n  if (normUser.includes(t)) matches.push({ ...h, triggerLen: t.length });\n}\nmatches.sort((a,b) => b.triggerLen - a.triggerLen || String(a.row).localeCompare(String(b.row)));\nconst topMatches = matches.slice(0, 12);\n\nconst looksLikeCheck = topMatches.length > 0 || (\n  userText.length >= 3 &&\n  !/\\?$/.test(userText) &&\n  !/^(why|neden|nasil|nasıl|what if|degistir|değiştir|change|propose|grup|group|sayfa|page|ara|help)/i.test(userText)\n);\n\nif (looksLikeCheck && (topMatches.length > 0 || userText.length < 220)) {\n  if (!topMatches.length) {\n    return reply(\n`Google Sheet: eşleşen trigger yok.\\n\"${userText}\"\\nTaranan aktif kural: ${activeMeta.length}\\n\\n` +\n`Sheet gezmek için: liste | sayfa 1 | grup no_answer | ara <kelime>`\n    );\n  }\n  const best = topMatches[0];\n  return reply(\n`Sheet eşleşmesi:\\n\"${userText}\"\\n\\n` +\n`En iyi → row ${best.row}: \"${best.trigger}\" → ${best.status || '?'}` +\n(best.group ? ` [${best.group}]` : '') + `\\n\\n` +\n`Hits (${matches.length}, showing ${topMatches.length}):\\n\\n` +\ntopMatches.map(formatHit).join('\\n\\n')\n  );\n}\n\n// AI for open Q / edits — sheet first\nconst sheetDigest = activeMeta.slice(0, 120).map(h => `row ${h.row}|${h.group}|\"${h.trigger}\"→${h.status}`).join('\\n');\nconst matchDigest = topMatches.length\n  ? topMatches.map(h => `row ${h.row} \"${h.trigger}\" → ${h.status}`).join('\\n')\n  : '(no substring match)';\n\nconst BRAIN = `You help browse/edit GOOGLE SHEET CRM rules (Sheet1). User language. Concise.\nPrefer sheet row numbers and triggers. Canonical policies only as footnotes.\nIf drafting a sheet change, end with: Reply CONFIRM to save this draft.\n\nSHEET ACTIVE:\n${sheetDigest || '(empty)'}\n\nMATCHES:\n${matchDigest}`;\n\nif (!Array.isArray(sd.chatHistory)) sd.chatHistory = [];\nsd.chatHistory.push({ role: 'user', content: userText });\nif (sd.chatHistory.length > 12) sd.chatHistory = sd.chatHistory.slice(-12);\nconst hist = sd.chatHistory.map(h => `${h.role}: ${h.content}`).join('\\n');\n\nreturn [{ json: {\n  chat_id: chatId, branch: 'ai', system_prompt: BRAIN,\n  user_message: `Chat:\\n${hist}\\n\\nLatest:\\n${userText}`, raw_user: userText\n}}];\n"
-      },
-      "id": "prepare-brain",
-      "name": "Prepare Brain",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1160,
-        1300
-      ]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose"
-          },
-          "conditions": [
-            {
-              "id": "is-confirm",
-              "leftValue": "={{ $json.branch }}",
-              "rightValue": "confirm",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "brain-branch",
-      "name": "Brain Branch",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        1380,
-        1300
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "const sd = $getWorkflowStaticData('global');\nconst j = $input.first().json;\nsd.pendingProposal = null;\nreturn [{ json: j }];\n"
-      },
-      "id": "clear-proposal",
-      "name": "Clear Proposal",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1490,
-        1180
-      ]
-    },
-    {
-      "parameters": {
-        "operation": "append",
-        "documentId": {
-          "__rl": true,
-          "value": "17m6No_sKILzLs5ZjmND0FykwkjFBLvWhiJP6NCcKq8E",
-          "mode": "list",
-          "cachedResultName": "CRM_AI_Rules"
-        },
-        "sheetName": {
-          "__rl": true,
-          "value": "Decision_Memory",
-          "mode": "name"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "type": "={{ $json.type || \"rule_draft\" }}",
-            "account_no": "={{ $json.account_no }}",
-            "old_status": "={{ $json.old_status }}",
-            "new_status": "={{ $json.new_status }}",
-            "validation_result": "={{ $json.validation_result }}",
-            "decision_source": "={{ $json.decision_source }}",
-            "matched_keyword": "={{ $json.matched_keyword }}",
-            "confidence": "={{ $json.confidence }}",
-            "reason": "={{ $json.reason }}",
-            "example_comment": "={{ $json.example_comment }}"
-          }
-        },
-        "options": {}
-      },
-      "id": "append-rule-draft",
-      "name": "Append Rule Draft",
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.7,
-      "position": [
-        1600,
-        1180
-      ],
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "onoiTia5zEmBSr7R",
-          "name": "Google Sheets account 2"
-        }
-      },
-      "continueOnFail": true
-    },
-    {
-      "parameters": {
-        "operation": "sendMessage",
-        "chatId": "={{ $json.chat_id }}",
-        "text": "={{ $json.reply_text }}",
-        "additionalFields": {
-          "appendAttribution": false
-        }
-      },
-      "id": "send-confirm-reply",
-      "name": "Send Confirm Reply",
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
-      "position": [
-        1820,
-        1180
-      ],
-      "credentials": {
-        "telegramApi": {
-          "id": "q14sD9Geek2ExOku",
-          "name": "Telegram account"
-        }
-      },
-      "webhookId": "173b0ef1-c957-49ac-b3a5-ac09afe4ebea"
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose"
-          },
-          "conditions": [
-            {
-              "id": "is-ai",
-              "leftValue": "={{ $json.branch }}",
-              "rightValue": "ai",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "ai-or-reply",
-      "name": "AI Or Quick Reply",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        1490,
-        1420
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://api.openai.com/v1/chat/completions",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "openAiApi",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ model: 'gpt-5.4-mini', temperature: 0.2, messages: [{ role: 'system', content: $json.system_prompt }, { role: 'user', content: $json.user_message }] }) }}",
-        "options": {
-          "timeout": 120000
-        }
-      },
-      "id": "brain-openai",
-      "name": "Brain OpenAI",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        1600,
-        1420
-      ],
-      "credentials": {
-        "openAiApi": {
-          "id": "jxy59ikFPZJ2RYDf",
-          "name": "OpenAI account"
-        }
-      },
-      "continueOnFail": true
-    },
-    {
-      "parameters": {
-        "jsCode": "const sd = $getWorkflowStaticData('global');\nconst prep = $('Prepare Brain').item.json;\nconst raw = $input.first().json;\nlet text = '';\ntry {\n  text = raw.choices?.[0]?.message?.content || raw.message?.content || raw.error?.message || JSON.stringify(raw).slice(0, 500);\n} catch (e) { text = 'Brain error: could not parse model response.'; }\ntext = String(text || '').trim() || '(empty reply)';\nif (/reply confirm to save/i.test(text)) {\n  sd.pendingProposal = {\n    id: 'draft_' + Date.now(),\n    summary: text.slice(0, 900),\n    expected_status: (text.match(/Expected status:\\s*(.+)/i) || [,''])[1].trim().slice(0, 80),\n    example: (text.match(/Example[^\\n]*:\\s*(.+)/i) || [,''])[1].trim().slice(0, 200)\n  };\n}\nif (!Array.isArray(sd.chatHistory)) sd.chatHistory = [];\nsd.chatHistory.push({ role: 'assistant', content: text.slice(0, 1000) });\nif (sd.chatHistory.length > 12) sd.chatHistory = sd.chatHistory.slice(-12);\nif (text.length > 3500) text = text.slice(0, 3500) + '\\n…';\nreturn [{ json: { chat_id: prep.chat_id, reply_text: text } }];\n"
-      },
-      "id": "parse-brain",
-      "name": "Parse Brain Reply",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1820,
-        1420
-      ]
-    },
-    {
-      "parameters": {
-        "operation": "sendMessage",
-        "chatId": "={{ $json.chat_id }}",
-        "text": "={{ $json.reply_text }}",
-        "additionalFields": {
-          "appendAttribution": false
-        }
-      },
-      "id": "send-brain-reply",
-      "name": "Send Brain Reply",
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
-      "position": [
-        2040,
-        1420
-      ],
-      "credentials": {
-        "telegramApi": {
-          "id": "q14sD9Geek2ExOku",
-          "name": "Telegram account"
-        }
-      },
-      "webhookId": "fce3bdde-6bb2-49df-a618-162b86cead64"
-    },
-    {
-      "parameters": {
-        "operation": "sendMessage",
-        "chatId": "={{ $json.chat_id }}",
-        "text": "={{ $json.reply_text }}",
-        "additionalFields": {
-          "appendAttribution": false
-        }
-      },
-      "id": "send-quick-brain",
-      "name": "Send Quick Brain Reply",
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
-      "position": [
-        1820,
-        1550
-      ],
-      "credentials": {
-        "telegramApi": {
-          "id": "q14sD9Geek2ExOku",
-          "name": "Telegram account"
-        }
-      },
-      "webhookId": "b8db263d-c2b2-49a6-bc2b-4feb0ef2ef61"
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose"
-          },
-          "conditions": [
-            {
-              "id": "has-cb",
-              "leftValue": "={{ $json.callback_id }}",
-              "rightValue": "",
-              "operator": {
-                "type": "string",
-                "operation": "notEmpty"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "callback-gate",
-      "name": "Callback Gate",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        720,
-        360
-      ]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose"
-          },
-          "conditions": [
-            {
-              "id": "has-cb2",
-              "leftValue": "={{ $json.callback_id }}",
-              "rightValue": "",
-              "operator": {
-                "type": "string",
-                "operation": "notEmpty"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "enter-has-cb",
-      "name": "Enter Has Callback",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        720,
-        900
-      ]
     }
   ],
   "connections": {
@@ -1079,14 +1553,63 @@
       "main": [
         [
           {
-            "node": "Send Start",
+            "node": "Prep Home",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Callback Gate",
+            "node": "Prep DB",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prep Rules Menu",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prep Review Start",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prep Ask",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prep Review Next",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prep Wrong Picker",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prep Fix Save",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Seed Ask",
             "type": "main",
             "index": 0
           }
@@ -1107,39 +1630,404 @@
         ],
         [
           {
-            "node": "Enter Has Callback",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Seed Rules Msg",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Exit Has Callback",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Other Hint",
+            "node": "Prep Home",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Answer Callback": {
+    "Prep Home": {
       "main": [
         [
           {
-            "node": "Ask File",
+            "node": "Home Has CB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Home Has CB": {
+      "main": [
+        [
+          {
+            "node": "Ans Home CB",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Home Menu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ans Home CB": {
+      "main": [
+        [
+          {
+            "node": "Send Home Menu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep DB": {
+      "main": [
+        [
+          {
+            "node": "DB Has CB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DB Has CB": {
+      "main": [
+        [
+          {
+            "node": "Ans DB CB",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send DB Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ans DB CB": {
+      "main": [
+        [
+          {
+            "node": "Send DB Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep Rules Menu": {
+      "main": [
+        [
+          {
+            "node": "Rules Has CB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rules Has CB": {
+      "main": [
+        [
+          {
+            "node": "Ans Rules CB",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Rules Menu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ans Rules CB": {
+      "main": [
+        [
+          {
+            "node": "Send Rules Menu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep Ask": {
+      "main": [
+        [
+          {
+            "node": "Ask Has CB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask Has CB": {
+      "main": [
+        [
+          {
+            "node": "Ans Ask CB",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Ask Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ans Ask CB": {
+      "main": [
+        [
+          {
+            "node": "Send Ask Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep Review Start": {
+      "main": [
+        [
+          {
+            "node": "Review Start Has CB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Review Start Has CB": {
+      "main": [
+        [
+          {
+            "node": "Ans Review Start",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Seed Review Chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ans Review Start": {
+      "main": [
+        [
+          {
+            "node": "Seed Review Chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Seed Review Chat": {
+      "main": [
+        [
+          {
+            "node": "Get Sheet For Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Sheet For Review": {
+      "main": [
+        [
+          {
+            "node": "Build Review Queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Review Queue": {
+      "main": [
+        [
+          {
+            "node": "Send Review Card",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep Review Next": {
+      "main": [
+        [
+          {
+            "node": "Next Has CB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Next Has CB": {
+      "main": [
+        [
+          {
+            "node": "Ans Next CB",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Next Card",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ans Next CB": {
+      "main": [
+        [
+          {
+            "node": "Send Next Card",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep Wrong Picker": {
+      "main": [
+        [
+          {
+            "node": "Wrong Has CB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wrong Has CB": {
+      "main": [
+        [
+          {
+            "node": "Ans Wrong CB",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Wrong Picker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ans Wrong CB": {
+      "main": [
+        [
+          {
+            "node": "Send Wrong Picker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep Fix Save": {
+      "main": [
+        [
+          {
+            "node": "Fix Has CB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fix Has CB": {
+      "main": [
+        [
+          {
+            "node": "Ans Fix CB",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Append Sheet Fix",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ans Fix CB": {
+      "main": [
+        [
+          {
+            "node": "Append Sheet Fix",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append Sheet Fix": {
+      "main": [
+        [
+          {
+            "node": "Send After Fix",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Seed Ask": {
+      "main": [
+        [
+          {
+            "node": "Get Sheet For Ask",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Sheet For Ask": {
+      "main": [
+        [
+          {
+            "node": "Match Ask Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Match Ask Text": {
+      "main": [
+        [
+          {
+            "node": "Send Ask Result",
             "type": "main",
             "index": 0
           }
@@ -1217,206 +2105,6 @@
         [
           {
             "node": "Append Human Vote",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Answer Rules Enter": {
-      "main": [
-        [
-          {
-            "node": "Rules Welcome",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Exit Has Callback": {
-      "main": [
-        [
-          {
-            "node": "Answer Rules Exit",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Rules Exit Msg",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Answer Rules Exit": {
-      "main": [
-        [
-          {
-            "node": "Rules Exit Msg",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Seed Rules Msg": {
-      "main": [
-        [
-          {
-            "node": "Get Rules Sheet",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Get Rules Sheet": {
-      "main": [
-        [
-          {
-            "node": "After Rules Sheet",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "After Rules Sheet": {
-      "main": [
-        [
-          {
-            "node": "Prepare Brain",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Prepare Brain": {
-      "main": [
-        [
-          {
-            "node": "Brain Branch",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Brain Branch": {
-      "main": [
-        [
-          {
-            "node": "Clear Proposal",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "AI Or Quick Reply",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Clear Proposal": {
-      "main": [
-        [
-          {
-            "node": "Append Rule Draft",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Append Rule Draft": {
-      "main": [
-        [
-          {
-            "node": "Send Confirm Reply",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "AI Or Quick Reply": {
-      "main": [
-        [
-          {
-            "node": "Brain OpenAI",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Send Quick Brain Reply",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Brain OpenAI": {
-      "main": [
-        [
-          {
-            "node": "Parse Brain Reply",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Parse Brain Reply": {
-      "main": [
-        [
-          {
-            "node": "Send Brain Reply",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Callback Gate": {
-      "main": [
-        [
-          {
-            "node": "Answer Callback",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Ask File",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Enter Has Callback": {
-      "main": [
-        [
-          {
-            "node": "Answer Rules Enter",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Rules Welcome",
             "type": "main",
             "index": 0
           }
