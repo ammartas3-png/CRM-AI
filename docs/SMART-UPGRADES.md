@@ -61,3 +61,5 @@ Sheet'i elle düzenlemeniz gerekmez; motor çakışan satırları kodda yok saya
 
 - Soft limit raised to **2500 leads per run** so typical CRM exports (~1800) send **one** Telegram report set.
 - If still over 2500: sequential chunks continue, but remaining queue is passed in the webhook body (fixes a race that dropped parts 3/4 after 500+500).
+
+See also: `docs/RULE-ENGINE-INTEGRATION.md` (classify-leads + vault + live Memory Match sync of approved rules).

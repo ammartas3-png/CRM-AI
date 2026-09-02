@@ -5,17 +5,43 @@ from typing import Any, Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 
+from crm_classify import classify_leads, write_classify_run_note
 from engine import run_zero_token_validation, write_run_note
 
-app = FastAPI(title="Zero-Token Rule Engine", version="1.0.0")
+app = FastAPI(title="Zero-Token Rule Engine", version="1.1.0")
 
 VAULT_RUNS = Path(os.getenv("VAULT_RUNS_DIR", "/app/vault/runs"))
 
 
+class ClassifyRequest(BaseModel):
+    leads: list[dict[str, Any]] = Field(default_factory=list)
+    source: Optional[str] = "n8n-v2"
+    write_vault: bool = True
+
+
 @app.get("/health")
 async def health() -> dict[str, Any]:
-    return {"ok": True, "service": "rule-engine", "token_cost": 0}
+    return {
+        "ok": True,
+        "service": "rule-engine",
+        "token_cost": 0,
+        "endpoints": ["/rules/validate", "/rules/classify-leads"],
+    }
+
+
+@app.post("/rules/classify-leads")
+async def classify_leads_endpoint(body: ClassifyRequest) -> JSONResponse:
+    if not body.leads:
+        raise HTTPException(status_code=400, detail="leads array is required")
+    result = classify_leads(body.leads)
+    vault_note = ""
+    if body.write_vault:
+        vault_note = str(write_classify_run_note(VAULT_RUNS, result, source=body.source or "classify"))
+    result["vault_note"] = vault_note
+    result["source"] = body.source
+    return JSONResponse(result)
 
 
 @app.post("/rules/validate")
