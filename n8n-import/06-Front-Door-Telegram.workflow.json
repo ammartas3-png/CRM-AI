@@ -27,7 +27,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const update = $input.first().json;\n\nif (update.callback_query) {\n  const cb = update.callback_query;\n  return [{\n    json: {\n      route: 'callback',\n      callback_id: cb.id,\n      callback_data: cb.data,\n      chat_id: cb.message?.chat?.id,\n      user_id: String(cb.from?.id || '')\n    }\n  }];\n}\n\nconst message = update.message || {};\nconst chatId = message.chat?.id;\nconst text = message.text || '';\n\nif (typeof text === 'string' && text.startsWith('/start')) {\n  return [{ json: { route: 'start', chat_id: chatId } }];\n}\n\nif (message.document) {\n  return [{\n    json: {\n      route: 'document',\n      chat_id: chatId,\n      file_id: message.document.file_id,\n      file_name: message.document.file_name || 'upload.xlsx',\n      mime_type: message.document.mime_type || ''\n    }\n  }];\n}\n\nreturn [{ json: { route: 'other', chat_id: chatId } }];\n"
+        "jsCode": "const update = $input.first().json;\n\nif (update.callback_query) {\n  const cb = update.callback_query;\n  const data = String(cb.data || '');\n  // Status survey vote: v|<account>|<code>\n  if (data.startsWith('v|')) {\n    const parts = data.split('|');\n    const account = parts[1] || '';\n    const code = parts[2] || '';\n    const STATUS = {\n      ca: 'Call Again',\n      na: 'No Answer 1-5',\n      n5: 'No Answer 5 UP',\n      rc: 'Recall',\n      ni: 'No Interest',\n      np: 'No Potential',\n      wn: 'Wrong Number or Email',\n      dr: 'Denied Registration',\n      keep: 'Keep CRM'\n    };\n    const status = STATUS[code] || code;\n    const sd = $getWorkflowStaticData('global');\n    if (!Array.isArray(sd.humanVotes)) sd.humanVotes = [];\n    sd.humanVotes.push({\n      account, status, code,\n      chat_id: cb.message?.chat?.id,\n      user_id: String(cb.from?.id || ''),\n      at: new Date().toISOString()\n    });\n    // keep last 200\n    if (sd.humanVotes.length > 200) sd.humanVotes = sd.humanVotes.slice(-200);\n    return [{\n      json: {\n        route: 'vote',\n        callback_id: cb.id,\n        callback_data: data,\n        chat_id: cb.message?.chat?.id,\n        user_id: String(cb.from?.id || ''),\n        account,\n        status,\n        code,\n        vote_ack: `Saved: ${account} → ${status}`\n      }\n    }];\n  }\n  return [{\n    json: {\n      route: 'callback',\n      callback_id: cb.id,\n      callback_data: data,\n      chat_id: cb.message?.chat?.id,\n      user_id: String(cb.from?.id || '')\n    }\n  }];\n}\n\nconst message = update.message || {};\nconst chatId = message.chat?.id;\nconst text = message.text || '';\n\nif (typeof text === 'string' && text.startsWith('/start')) {\n  return [{ json: { route: 'start', chat_id: chatId } }];\n}\n\nif (message.document) {\n  return [{\n    json: {\n      route: 'document',\n      chat_id: chatId,\n      file_id: message.document.file_id,\n      file_name: message.document.file_name || 'upload.xlsx',\n      mime_type: message.document.mime_type || ''\n    }\n  }];\n}\n\nreturn [{ json: { route: 'other', chat_id: chatId } }];\n"
       },
       "id": "route",
       "name": "Route Update",
@@ -107,6 +107,28 @@
               },
               "renameOutput": true,
               "outputKey": "document"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "vote",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "vote"
             }
           ]
         },
@@ -374,6 +396,103 @@
         }
       },
       "webhookId": "0f53b218-618f-4ea0-aa37-1be6b7f2c6c6"
+    },
+    {
+      "parameters": {
+        "resource": "callback",
+        "operation": "answerQuery",
+        "queryId": "={{ $json.callback_id }}",
+        "additionalFields": {
+          "text": "={{ $json.vote_ack }}"
+        }
+      },
+      "id": "answer-vote",
+      "name": "Answer Vote",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        940,
+        700
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "q14sD9Geek2ExOku",
+          "name": "Telegram account"
+        }
+      },
+      "webhookId": "3d4c546b-7861-426b-b2ba-47dcdc5cca13"
+    },
+    {
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ \"✅ \" + $json.vote_ack + \"\\n(Human survey — saved for this chat session)\" }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "confirm-vote",
+      "name": "Confirm Vote",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1160,
+        700
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "q14sD9Geek2ExOku",
+          "name": "Telegram account"
+        }
+      },
+      "webhookId": "679b2f2d-490c-4a4e-9e0e-f98e4e15c33c"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "17m6No_sKILzLs5ZjmND0FykwkjFBLvWhiJP6NCcKq8E",
+          "mode": "list",
+          "cachedResultName": "CRM_AI_Rules"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Decision_Memory",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "type": "human_survey",
+            "account_no": "={{ $json.account }}",
+            "old_status": "",
+            "new_status": "={{ $json.status }}",
+            "validation_result": "Human Vote",
+            "decision_source": "telegram_survey",
+            "matched_keyword": "={{ $json.code }}",
+            "confidence": "Human",
+            "reason": "={{ $json.vote_ack }}",
+            "example_comment": ""
+          }
+        },
+        "options": {}
+      },
+      "id": "append-human-vote",
+      "name": "Append Human Vote",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1380,
+        700
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "onoiTia5zEmBSr7R",
+          "name": "Google Sheets account 2"
+        }
+      },
+      "continueOnFail": true
     }
   ],
   "connections": {
@@ -418,6 +537,13 @@
         [
           {
             "node": "Processing",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Answer Vote",
             "type": "main",
             "index": 0
           }
@@ -491,6 +617,28 @@
         [
           {
             "node": "Ack Started",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Answer Vote": {
+      "main": [
+        [
+          {
+            "node": "Confirm Vote",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirm Vote": {
+      "main": [
+        [
+          {
+            "node": "Append Human Vote",
             "type": "main",
             "index": 0
           }

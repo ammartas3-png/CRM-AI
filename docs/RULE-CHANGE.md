@@ -62,8 +62,12 @@ python3 -m pytest -q services/tests/test_golden_classify.py
 | n8n **Memory Match** | Canlı Telegram motoru |
 | Google Sheet | Sadece `human_approved=true` tetikleyiciler |
 
-## Yapmayın
+## Telegram status survey (live)
 
-- Onaysız AI sheet satırı eklemeyin
-- CrewAI / semantic cache’i ana motor yapmayın
-- Kuralı sadece n8n Code’da bırakıp golden’sız bırakmayın
+After each run summary, V2 may send up to **12** uncertain leads as normal Telegram messages with status buttons (Call Again, No Answer, Recall, …). No n8n links.
+
+- Selected when: `Confidence=Low`, or `Manual Check`, or AI-path `Wrong` with Medium confidence
+- You tap a button → Front Door saves the vote and confirms in chat
+- Votes append to Google Sheet `Decision_Memory` as `type=human_survey` (best-effort)
+
+Reports still send as usual; the survey does not block XLSX files.

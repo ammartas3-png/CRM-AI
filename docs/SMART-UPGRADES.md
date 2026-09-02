@@ -78,3 +78,4 @@ Implemented without CrewAI / semantic-cache as primary engine:
 8. **Agent score** — Telegram summary lists per-agent correct %
 9. **Pandera gate + exact cache** — rule-engine classify path (`lead_gate.py`, `exact_cache.py`)
 10. **Rule-change system** — `docs/RULE-CHANGE.md`, GitHub Issue/PR templates, `scripts/new_rule.py` + `validate_rule_system.py` (Obsidian optional; repo+golden+n8n is the path)
+11. **Telegram status survey** — after summary, up to 12 Low-confidence / Manual / uncertain Wrong leads are sent as normal Telegram messages with inline status buttons (no n8n links). Taps go to Front Door → ack + `Decision_Memory` (`human_survey`)
