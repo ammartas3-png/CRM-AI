@@ -301,7 +301,7 @@
     },
     {
       "parameters": {
-        "jsCode": "\nconst chatId = $json.chat_id;\nconst hasCb = !!$json.callback_id;\nreturn [{ json: {\n  chat_id: chatId,\n  callback_id: $json.callback_id || '',\n  ack: $json.ack || 'Menu',\n  has_cb: hasCb,\n  text: \"Choose an option:\",\n  reply_markup: {\n    inline_keyboard: [\n      [{ text: \"Database check\", callback_data: \"m:db\" }],\n      [{ text: \"Rules (Google Sheet)\", callback_data: \"m:rules\" }]\n    ]\n  }\n}}];\n"
+        "jsCode": "\nconst chatId = $json.chat_id;\nconst hasCb = !!$json.callback_id;\nreturn [{ json: {\n  chat_id: chatId,\n  callback_id: $json.callback_id || '',\n  ack: $json.ack || 'Menu',\n  has_cb: hasCb,\n  text: \"Choose an option (tap a button):\",\n  reply_markup: {\n    inline_keyboard: [\n      [{ text: \"Database check\", callback_data: \"m:db\" }],\n      [{ text: \"Rules (Google Sheet)\", callback_data: \"m:rules\" }]\n    ]\n  }\n}}];\n"
       },
       "id": "prep-home",
       "name": "Prep Home",
@@ -372,21 +372,75 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "=https://api.telegram.org/bot{{$credentials.telegramApi.accessToken}}/sendMessage",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "telegramApi",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ chat_id: $('Prep Home').item.json.chat_id, text: $('Prep Home').item.json.text, reply_markup: $('Prep Home').item.json.reply_markup, disable_web_page_preview: true }) }}",
-        "options": {
-          "timeout": 30000
+        "operation": "sendMessage",
+        "chatId": "={{ $('Prep Home').item.json.chat_id }}",
+        "text": "={{ $('Prep Home').item.json.text }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "Database check",
+                    "additionalFields": {
+                      "callback_data": "m:db"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "Rules (Google Sheet)",
+                    "additionalFields": {
+                      "callback_data": "m:rules"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "appendAttribution": false,
+          "replyMarkup": "inlineKeyboard",
+          "inlineKeyboard": {
+            "rows": [
+              {
+                "row": {
+                  "buttons": [
+                    {
+                      "text": "Database check",
+                      "additionalFields": {
+                        "callback_data": "m:db"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "row": {
+                  "buttons": [
+                    {
+                      "text": "Rules (Google Sheet)",
+                      "additionalFields": {
+                        "callback_data": "m:rules"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
         }
       },
       "id": "send-home-menu",
       "name": "Send Home Menu",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
       "position": [
         1300,
         0
@@ -397,6 +451,7 @@
           "name": "Telegram account"
         }
       },
+      "webhookId": "df3e98de-221a-4d64-bdce-107eca57b41c",
       "continueOnFail": true
     },
     {
@@ -472,21 +527,51 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "=https://api.telegram.org/bot{{$credentials.telegramApi.accessToken}}/sendMessage",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "telegramApi",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ chat_id: $('Prep DB').item.json.chat_id, text: $('Prep DB').item.json.text, reply_markup: $('Prep DB').item.json.reply_markup, disable_web_page_preview: true }) }}",
-        "options": {
-          "timeout": 30000
+        "operation": "sendMessage",
+        "chatId": "={{ $('Prep DB').item.json.chat_id }}",
+        "text": "={{ $('Prep DB').item.json.text }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "Back to menu",
+                    "additionalFields": {
+                      "callback_data": "m:home"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "appendAttribution": false,
+          "replyMarkup": "inlineKeyboard",
+          "inlineKeyboard": {
+            "rows": [
+              {
+                "row": {
+                  "buttons": [
+                    {
+                      "text": "Back to menu",
+                      "additionalFields": {
+                        "callback_data": "m:home"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
         }
       },
       "id": "send-db-prompt",
       "name": "Send DB Prompt",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
       "position": [
         1300,
         200
@@ -497,6 +582,7 @@
           "name": "Telegram account"
         }
       },
+      "webhookId": "bae73d2c-436f-4b19-bb94-d4877ad7557c",
       "continueOnFail": true
     },
     {
@@ -572,21 +658,99 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "=https://api.telegram.org/bot{{$credentials.telegramApi.accessToken}}/sendMessage",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "telegramApi",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ chat_id: $('Prep Rules Menu').item.json.chat_id, text: $('Prep Rules Menu').item.json.text, reply_markup: $('Prep Rules Menu').item.json.reply_markup, disable_web_page_preview: true }) }}",
-        "options": {
-          "timeout": 30000
+        "operation": "sendMessage",
+        "chatId": "={{ $('Prep Rules Menu').item.json.chat_id }}",
+        "text": "={{ $('Prep Rules Menu').item.json.text }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "Review sheet rules",
+                    "additionalFields": {
+                      "callback_data": "m:review"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "Ask about a comment",
+                    "additionalFields": {
+                      "callback_data": "m:ask"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "Back",
+                    "additionalFields": {
+                      "callback_data": "m:home"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "appendAttribution": false,
+          "replyMarkup": "inlineKeyboard",
+          "inlineKeyboard": {
+            "rows": [
+              {
+                "row": {
+                  "buttons": [
+                    {
+                      "text": "Review sheet rules",
+                      "additionalFields": {
+                        "callback_data": "m:review"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "row": {
+                  "buttons": [
+                    {
+                      "text": "Ask about a comment",
+                      "additionalFields": {
+                        "callback_data": "m:ask"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "row": {
+                  "buttons": [
+                    {
+                      "text": "Back",
+                      "additionalFields": {
+                        "callback_data": "m:home"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
         }
       },
       "id": "send-rules-menu",
       "name": "Send Rules Menu",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
       "position": [
         1300,
         400
@@ -597,6 +761,7 @@
           "name": "Telegram account"
         }
       },
+      "webhookId": "ce458ce5-6e8b-4713-9733-040fd6c4de00",
       "continueOnFail": true
     },
     {
@@ -672,21 +837,51 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "=https://api.telegram.org/bot{{$credentials.telegramApi.accessToken}}/sendMessage",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "telegramApi",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ chat_id: $('Prep Ask').item.json.chat_id, text: $('Prep Ask').item.json.text, reply_markup: $('Prep Ask').item.json.reply_markup, disable_web_page_preview: true }) }}",
-        "options": {
-          "timeout": 30000
+        "operation": "sendMessage",
+        "chatId": "={{ $('Prep Ask').item.json.chat_id }}",
+        "text": "={{ $('Prep Ask').item.json.text }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "Back to Rules",
+                    "additionalFields": {
+                      "callback_data": "m:rules"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "appendAttribution": false,
+          "replyMarkup": "inlineKeyboard",
+          "inlineKeyboard": {
+            "rows": [
+              {
+                "row": {
+                  "buttons": [
+                    {
+                      "text": "Back to Rules",
+                      "additionalFields": {
+                        "callback_data": "m:rules"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
         }
       },
       "id": "send-ask-prompt",
       "name": "Send Ask Prompt",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
       "position": [
         1300,
         600
@@ -697,6 +892,7 @@
           "name": "Telegram account"
         }
       },
+      "webhookId": "2d785446-1570-43fd-9e13-cee035cc3489",
       "continueOnFail": true
     },
     {
@@ -817,21 +1013,99 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "=https://api.telegram.org/bot{{$credentials.telegramApi.accessToken}}/sendMessage",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "telegramApi",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ chat_id: $('Build Review Queue').item.json.chat_id, text: $('Build Review Queue').item.json.text, reply_markup: $('Build Review Queue').item.json.reply_markup, disable_web_page_preview: true }) }}",
-        "options": {
-          "timeout": 30000
+        "operation": "sendMessage",
+        "chatId": "={{ $('Build Review Queue').item.json.chat_id }}",
+        "text": "={{ $('Build Review Queue').item.json.text }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "Correct",
+                    "additionalFields": {
+                      "callback_data": "rev:ok"
+                    }
+                  },
+                  {
+                    "text": "Wrong",
+                    "additionalFields": {
+                      "callback_data": "rev:bad"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "Skip",
+                    "additionalFields": {
+                      "callback_data": "rev:skip"
+                    }
+                  },
+                  {
+                    "text": "Exit",
+                    "additionalFields": {
+                      "callback_data": "rev:exit"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "appendAttribution": false,
+          "replyMarkup": "inlineKeyboard",
+          "inlineKeyboard": {
+            "rows": [
+              {
+                "row": {
+                  "buttons": [
+                    {
+                      "text": "Correct",
+                      "additionalFields": {
+                        "callback_data": "rev:ok"
+                      }
+                    },
+                    {
+                      "text": "Wrong",
+                      "additionalFields": {
+                        "callback_data": "rev:bad"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "row": {
+                  "buttons": [
+                    {
+                      "text": "Skip",
+                      "additionalFields": {
+                        "callback_data": "rev:skip"
+                      }
+                    },
+                    {
+                      "text": "Exit",
+                      "additionalFields": {
+                        "callback_data": "rev:exit"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
         }
       },
       "id": "send-review-card",
       "name": "Send Review Card",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
       "position": [
         1520,
         860
@@ -842,6 +1116,7 @@
           "name": "Telegram account"
         }
       },
+      "webhookId": "11be6c4f-1f5f-4828-9b54-f0c3cacdf4e0",
       "continueOnFail": true
     },
     {
@@ -930,21 +1205,99 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "=https://api.telegram.org/bot{{$credentials.telegramApi.accessToken}}/sendMessage",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "telegramApi",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ chat_id: $('Prep Review Next').item.json.chat_id, text: $('Prep Review Next').item.json.text, reply_markup: $('Prep Review Next').item.json.reply_markup, disable_web_page_preview: true }) }}",
-        "options": {
-          "timeout": 30000
+        "operation": "sendMessage",
+        "chatId": "={{ $('Prep Review Next').item.json.chat_id }}",
+        "text": "={{ $('Prep Review Next').item.json.text }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "Correct",
+                    "additionalFields": {
+                      "callback_data": "rev:ok"
+                    }
+                  },
+                  {
+                    "text": "Wrong",
+                    "additionalFields": {
+                      "callback_data": "rev:bad"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "Skip",
+                    "additionalFields": {
+                      "callback_data": "rev:skip"
+                    }
+                  },
+                  {
+                    "text": "Exit",
+                    "additionalFields": {
+                      "callback_data": "rev:exit"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "appendAttribution": false,
+          "replyMarkup": "inlineKeyboard",
+          "inlineKeyboard": {
+            "rows": [
+              {
+                "row": {
+                  "buttons": [
+                    {
+                      "text": "Correct",
+                      "additionalFields": {
+                        "callback_data": "rev:ok"
+                      }
+                    },
+                    {
+                      "text": "Wrong",
+                      "additionalFields": {
+                        "callback_data": "rev:bad"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "row": {
+                  "buttons": [
+                    {
+                      "text": "Skip",
+                      "additionalFields": {
+                        "callback_data": "rev:skip"
+                      }
+                    },
+                    {
+                      "text": "Exit",
+                      "additionalFields": {
+                        "callback_data": "rev:exit"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
         }
       },
       "id": "send-next-card",
       "name": "Send Next Card",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
       "position": [
         1300,
         1100
@@ -955,6 +1308,7 @@
           "name": "Telegram account"
         }
       },
+      "webhookId": "938fc3cf-a3c8-4431-b959-9c900535354e",
       "continueOnFail": true
     },
     {
@@ -1030,21 +1384,231 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "=https://api.telegram.org/bot{{$credentials.telegramApi.accessToken}}/sendMessage",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "telegramApi",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ chat_id: $('Prep Wrong Picker').item.json.chat_id, text: $('Prep Wrong Picker').item.json.text, reply_markup: $('Prep Wrong Picker').item.json.reply_markup, disable_web_page_preview: true }) }}",
-        "options": {
-          "timeout": 30000
+        "operation": "sendMessage",
+        "chatId": "={{ $('Prep Wrong Picker').item.json.chat_id }}",
+        "text": "={{ $('Prep Wrong Picker').item.json.text }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "Call Again",
+                    "additionalFields": {
+                      "callback_data": "fix:ca"
+                    }
+                  },
+                  {
+                    "text": "Recall",
+                    "additionalFields": {
+                      "callback_data": "fix:rc"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "No Answer 1-5",
+                    "additionalFields": {
+                      "callback_data": "fix:na"
+                    }
+                  },
+                  {
+                    "text": "No Answer 5UP",
+                    "additionalFields": {
+                      "callback_data": "fix:n5"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "No Interest",
+                    "additionalFields": {
+                      "callback_data": "fix:ni"
+                    }
+                  },
+                  {
+                    "text": "No Potential",
+                    "additionalFields": {
+                      "callback_data": "fix:np"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "Wrong Number",
+                    "additionalFields": {
+                      "callback_data": "fix:wn"
+                    }
+                  },
+                  {
+                    "text": "Denied Reg",
+                    "additionalFields": {
+                      "callback_data": "fix:dr"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "Manual Check",
+                    "additionalFields": {
+                      "callback_data": "fix:mc"
+                    }
+                  },
+                  {
+                    "text": "Keep as-is",
+                    "additionalFields": {
+                      "callback_data": "fix:keep"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "Cancel / Skip",
+                    "additionalFields": {
+                      "callback_data": "rev:skip"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "appendAttribution": false,
+          "replyMarkup": "inlineKeyboard",
+          "inlineKeyboard": {
+            "rows": [
+              {
+                "row": {
+                  "buttons": [
+                    {
+                      "text": "Call Again",
+                      "additionalFields": {
+                        "callback_data": "fix:ca"
+                      }
+                    },
+                    {
+                      "text": "Recall",
+                      "additionalFields": {
+                        "callback_data": "fix:rc"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "row": {
+                  "buttons": [
+                    {
+                      "text": "No Answer 1-5",
+                      "additionalFields": {
+                        "callback_data": "fix:na"
+                      }
+                    },
+                    {
+                      "text": "No Answer 5UP",
+                      "additionalFields": {
+                        "callback_data": "fix:n5"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "row": {
+                  "buttons": [
+                    {
+                      "text": "No Interest",
+                      "additionalFields": {
+                        "callback_data": "fix:ni"
+                      }
+                    },
+                    {
+                      "text": "No Potential",
+                      "additionalFields": {
+                        "callback_data": "fix:np"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "row": {
+                  "buttons": [
+                    {
+                      "text": "Wrong Number",
+                      "additionalFields": {
+                        "callback_data": "fix:wn"
+                      }
+                    },
+                    {
+                      "text": "Denied Reg",
+                      "additionalFields": {
+                        "callback_data": "fix:dr"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "row": {
+                  "buttons": [
+                    {
+                      "text": "Manual Check",
+                      "additionalFields": {
+                        "callback_data": "fix:mc"
+                      }
+                    },
+                    {
+                      "text": "Keep as-is",
+                      "additionalFields": {
+                        "callback_data": "fix:keep"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "row": {
+                  "buttons": [
+                    {
+                      "text": "Cancel / Skip",
+                      "additionalFields": {
+                        "callback_data": "rev:skip"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
         }
       },
       "id": "send-wrong-picker",
       "name": "Send Wrong Picker",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
       "position": [
         1300,
         1300
@@ -1055,6 +1619,7 @@
           "name": "Telegram account"
         }
       },
+      "webhookId": "13da1026-6f9e-4e34-b2c1-f9b0e89454cb",
       "continueOnFail": true
     },
     {
@@ -1177,21 +1742,123 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "=https://api.telegram.org/bot{{$credentials.telegramApi.accessToken}}/sendMessage",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "telegramApi",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ chat_id: $('Prep Fix Save').item.json.chat_id, text: $('Prep Fix Save').item.json.text, reply_markup: $('Prep Fix Save').item.json.reply_markup, disable_web_page_preview: true }) }}",
-        "options": {
-          "timeout": 30000
+        "operation": "sendMessage",
+        "chatId": "={{ $('Prep Fix Save').item.json.chat_id }}",
+        "text": "={{ $('Prep Fix Save').item.json.text }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "Correct",
+                    "additionalFields": {
+                      "callback_data": "rev:ok"
+                    }
+                  },
+                  {
+                    "text": "Wrong",
+                    "additionalFields": {
+                      "callback_data": "rev:bad"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "Skip",
+                    "additionalFields": {
+                      "callback_data": "rev:skip"
+                    }
+                  },
+                  {
+                    "text": "Exit",
+                    "additionalFields": {
+                      "callback_data": "rev:exit"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "Main menu",
+                    "additionalFields": {
+                      "callback_data": "m:home"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "appendAttribution": false,
+          "replyMarkup": "inlineKeyboard",
+          "inlineKeyboard": {
+            "rows": [
+              {
+                "row": {
+                  "buttons": [
+                    {
+                      "text": "Correct",
+                      "additionalFields": {
+                        "callback_data": "rev:ok"
+                      }
+                    },
+                    {
+                      "text": "Wrong",
+                      "additionalFields": {
+                        "callback_data": "rev:bad"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "row": {
+                  "buttons": [
+                    {
+                      "text": "Skip",
+                      "additionalFields": {
+                        "callback_data": "rev:skip"
+                      }
+                    },
+                    {
+                      "text": "Exit",
+                      "additionalFields": {
+                        "callback_data": "rev:exit"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "row": {
+                  "buttons": [
+                    {
+                      "text": "Main menu",
+                      "additionalFields": {
+                        "callback_data": "m:home"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
         }
       },
       "id": "send-after-fix",
       "name": "Send After Fix",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
       "position": [
         1520,
         1500
@@ -1202,6 +1869,7 @@
           "name": "Telegram account"
         }
       },
+      "webhookId": "8ca3b93b-1765-49cf-8b3a-e955eba97b68",
       "continueOnFail": true
     },
     {
@@ -1264,21 +1932,99 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "=https://api.telegram.org/bot{{$credentials.telegramApi.accessToken}}/sendMessage",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "telegramApi",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ chat_id: $('Match Ask Text').item.json.chat_id, text: $('Match Ask Text').item.json.text, reply_markup: $('Match Ask Text').item.json.reply_markup, disable_web_page_preview: true }) }}",
-        "options": {
-          "timeout": 30000
+        "operation": "sendMessage",
+        "chatId": "={{ $('Match Ask Text').item.json.chat_id }}",
+        "text": "={{ $('Match Ask Text').item.json.text }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "Ask another",
+                    "additionalFields": {
+                      "callback_data": "m:ask"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "Review rules",
+                    "additionalFields": {
+                      "callback_data": "m:review"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "Back",
+                    "additionalFields": {
+                      "callback_data": "m:rules"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "appendAttribution": false,
+          "replyMarkup": "inlineKeyboard",
+          "inlineKeyboard": {
+            "rows": [
+              {
+                "row": {
+                  "buttons": [
+                    {
+                      "text": "Ask another",
+                      "additionalFields": {
+                        "callback_data": "m:ask"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "row": {
+                  "buttons": [
+                    {
+                      "text": "Review rules",
+                      "additionalFields": {
+                        "callback_data": "m:review"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "row": {
+                  "buttons": [
+                    {
+                      "text": "Back",
+                      "additionalFields": {
+                        "callback_data": "m:rules"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
         }
       },
       "id": "send-ask-result",
       "name": "Send Ask Result",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
       "position": [
         1300,
         1700
@@ -1289,6 +2035,7 @@
           "name": "Telegram account"
         }
       },
+      "webhookId": "9d4f0032-42c7-461f-b305-147c7bc2ef68",
       "continueOnFail": true
     },
     {
@@ -2117,13 +2864,14 @@
   },
   "staticData": {
     "global": {
-      "mode": "rules",
+      "mode": "",
       "chatHistory": [],
       "_rulesMsg": {
         "chat_id": 1240141730,
         "text": "No Por",
         "is_confirm": false
-      }
+      },
+      "review": null
     }
   }
 }
