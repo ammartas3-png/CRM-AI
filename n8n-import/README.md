@@ -4,22 +4,20 @@ Bu klasordeki JSON dosyalarini n8n'e Import from File ile yukle.
 
 ## Dosyalar
 
-1. `01-telegram-database-check.workflow.json`
-   - Ana Telegram bot akisi (bunu mutlaka yukle)
-2. `02-mcp-database-check-tool.workflow.json`
+1. `03-telegram-database-check-self-contained.workflow.json`
+   - **SIMDI BUNU YUKLE** (n8n Cloud icin)
+   - CrewAI / Memory servisi gerektirmez
+   - xlsx okur, validate eder, csv dondurur
+2. `01-telegram-database-check.workflow.json`
+   - CrewAI + Memory servisleri ayaktaysa
+3. `02-mcp-database-check-tool.workflow.json`
    - MCP tool (istege bagli)
 
 ## Import adimlari
 
-1. n8n -> Workflows -> Import from File
-2. Once `01-...` dosyasini sec
-3. Telegram credential bagla
-4. Publish / Activate et
-5. Istersen `02-...` dosyasini da ayni sekilde import et
-
-## Onemli
-
-Eski published workflow:
-`Telegram Database Validator Bot V2`
-
-Yeni akisi yayina almadan once eskiyi unpublish et; ayni botta 2 trigger catisir.
+1. Onceki published workflow'lari **Unpublish** et
+2. n8n -> Import from File
+3. `03-telegram-database-check-self-contained.workflow.json` sec
+4. Telegram credential bagla
+5. Publish et
+6. Telegram'da `/start` -> Database check -> `.xlsx` gonder
