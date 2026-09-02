@@ -56,3 +56,8 @@ Applied after reviewing execution #1114 input vs output:
 8. **AI prompts** — money+concrete callback → Call Again; Appointment AI anti-false-positive rules
 
 Sheet'i elle düzenlemeniz gerekmez; motor çakışan satırları kodda yok sayar. İsteğe bağlı: row 397/405/407/130 yukarıdaki gibi korunur.
+
+## Chunking (large files)
+
+- Soft limit raised to **2500 leads per run** so typical CRM exports (~1800) send **one** Telegram report set.
+- If still over 2500: sequential chunks continue, but remaining queue is passed in the webhook body (fixes a race that dropped parts 3/4 after 500+500).
