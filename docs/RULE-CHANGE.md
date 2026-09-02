@@ -64,28 +64,19 @@ python3 -m pytest -q services/tests/test_golden_classify.py
 
 ## Telegram Rules brain (live)
 
-On `/start` choose **Rules brain** (next to Database check).
+On `/start` type **`2`** (or Rules brain).
 
-```text
-You chat in Telegram
-        │
-        ▼
-Front Door loads Google Sheet triggers + canonical rules
-        │
-        ▼
-OpenAI replies: which rule applies / why Wrong / draft a change
-        │
-        ▼
-You reply CONFIRM → draft saved to Decision_Memory (rule_draft)
-        │
-        ▼
-Then vault + golden + Memory Match (Cursor / rule-change flow)
-```
+**Google Sheet mode** — primary job is inspecting `CRM_AI_Rules` / Sheet1:
 
-- Paste a comment → “bu hangi kural?”
-- “Şunu değiştirelim…” → draft; `CONFIRM` saves
-- `/exit` leaves chat mode
-- Does **not** auto-edit Memory Match; that stays the rule-change checklist
+| You send | Bot does |
+|----------|----------|
+| a comment / phrase | lists matching **sheet rows** (row, trigger, status, group) |
+| `liste` | active rule counts by keyword_group |
+| `ara no money` | search sheet triggers |
+| change request | drafts a sheet edit; `CONFIRM` → Decision_Memory |
+| `exit` | leave mode |
+
+Canonical policies are only footnotes (e.g. Call Again &lt;5 NA days). Sheet matches are shown first.
 
 After each run summary, V2 may send up to **12** uncertain leads as normal Telegram messages with status buttons (Call Again, No Answer, Recall, …). No n8n links.
 
