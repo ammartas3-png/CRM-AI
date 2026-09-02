@@ -1,18 +1,27 @@
 # Rule Engine + Vault → V2 Integration
 
+## Single rule source
+
+| Layer | Role |
+|------|------|
+| `services/rule-engine/crm_classify.py` + `vault/` | **Canonical** zero-token business rules |
+| `evals/golden_leads.jsonl` + CI | Regression lock |
+| Live n8n **Memory Match** | Production mirror (n8n cloud cannot call localhost) |
+| Exact fingerprint cache | Safe reuse of skipAI decisions (not semantic) |
+
+Do **not** add CrewAI or semantic cache as the main engine.
+
 ## Status
 
 | Piece | Status |
 |------|--------|
-| `POST /rules/classify-leads` | Implemented (8 approved business rules) |
+| `POST /rules/classify-leads` | Implemented (+ Pandera gate + exact cache) |
 | Vault run/decision notes | Implemented |
-| Unit tests | `services/tests/test_crm_classify.py` |
-| Live n8n Memory Match | **Updated now** with same 8 rules (so Telegram benefits immediately) |
+| Golden set + GitHub Actions CI | `evals/` + `.github/workflows/ci.yml` |
+| Live n8n Memory Match | Synced with approved rules + sheet governance |
+| Front Door → V2 `chat_id` | Live (multipart form field) |
+| Dynamic Telegram chatId | Live (workflow staticData) |
 | HTTP Shadow node in n8n cloud | Ready when `RULE_ENGINE_URL` is public |
-
-## Why Memory Match was updated too
-
-n8n cloud cannot call `localhost:8070`. Until rule-engine is hosted publicly, the approved rules are enforced inside **Memory Match** so production stays correct.
 
 ## Approved rules (owner answers)
 
@@ -44,8 +53,12 @@ curl -X POST http://127.0.0.1:8070/rules/classify-leads \
 3. Optionally add columns `Engine Suggestion` / `Engine Source` for comparison
 4. When agreement is high, set gate: `skipAI=true` rows use engine decision
 
+## Sheet governance
+
+Memory Match skips Google Sheet rows that look AI-generated (`source`/`keyword_group`/`ai_generated`) unless `human_approved` / `reviewed` / `approved` is true. Prefer editing `crm_classify.py` + golden cases over dumping aggressive sheet phrases.
+
 ## Not in this phase
 
-- CrewAI
-- smart-layer Pandera full gate
+- CrewAI as primary classifier
+- Semantic (embedding) cache as primary cache
 - memory-service graph

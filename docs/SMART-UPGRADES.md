@@ -63,3 +63,17 @@ Sheet'i elle düzenlemeniz gerekmez; motor çakışan satırları kodda yok saya
 - If still over 2500: sequential chunks continue, but remaining queue is passed in the webhook body (fixes a race that dropped parts 3/4 after 500+500).
 
 See also: `docs/RULE-ENGINE-INTEGRATION.md` (classify-leads + vault + live Memory Match sync of approved rules).
+
+## Director upgrades (2026-09-02)
+
+Implemented without CrewAI / semantic-cache as primary engine:
+
+1. **Single rule source** — `crm_classify.py` + vault canonical; Memory Match is the live mirror; golden set locks behavior
+2. **Golden set + CI** — `evals/golden_leads.jsonl`, `.github/workflows/ci.yml`
+3. **Front Door in git** — `n8n-import/06-Front-Door-Telegram.workflow.json`
+4. **Dynamic Telegram chatId** — Front Door sends `chat_id` form field; V2 stores `staticData.telegramChatId` and all Telegram send nodes use it
+5. **Webhook env fallback** — Chunk Router / Schedule Next Chunk read `N8N_WEBHOOK_DATABASE_CHECK` or `DATABASE_CHECK_WEBHOOK_URL`
+6. **Sheet governance** — unapproved `ai_generated` sheet rows are skipped in Memory Match
+7. **Manual Entry closed loop** — columns `Applied to CRM`, `Applied At`, `Applied By`, `Review Notes`
+8. **Agent score** — Telegram summary lists per-agent correct %
+9. **Pandera gate + exact cache** — rule-engine classify path (`lead_gate.py`, `exact_cache.py`)

@@ -19,6 +19,8 @@ class ClassifyRequest(BaseModel):
     leads: list[dict[str, Any]] = Field(default_factory=list)
     source: Optional[str] = "n8n-v2"
     write_vault: bool = True
+    use_cache: bool = True
+    gate: bool = True
 
 
 @app.get("/health")
@@ -27,6 +29,7 @@ async def health() -> dict[str, Any]:
         "ok": True,
         "service": "rule-engine",
         "token_cost": 0,
+        "features": ["classify-leads", "exact-cache", "pandera-gate", "validate"],
         "endpoints": ["/rules/validate", "/rules/classify-leads"],
     }
 
@@ -35,7 +38,9 @@ async def health() -> dict[str, Any]:
 async def classify_leads_endpoint(body: ClassifyRequest) -> JSONResponse:
     if not body.leads:
         raise HTTPException(status_code=400, detail="leads array is required")
-    result = classify_leads(body.leads)
+    result = classify_leads(body.leads, use_cache=body.use_cache, gate=body.gate)
+    if result.get("gate_issues") and not result.get("leads"):
+        raise HTTPException(status_code=400, detail={"gate_issues": result["gate_issues"]})
     vault_note = ""
     if body.write_vault:
         vault_note = str(write_classify_run_note(VAULT_RUNS, result, source=body.source or "classify"))

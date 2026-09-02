@@ -295,6 +295,18 @@ def classify_lead(lead: dict[str, Any]) -> ClassifyResult:
             status = "No Answer 5 UP" if streak >= 5 else "No Answer 1-5"
             return done(status, "rule-engine:no_real_conversation", f"no real conversation streak={streak} => {status}", detail=f"streak days={streak}")
 
+    # Already No Potential (incl. subtypes like "No Potential - no documents"):
+    # keep CRM Correct unless a callback-driven rule above already fired.
+    if crm_c == "no potential":
+        return done(
+            crm,
+            "rule-engine:keep_no_potential",
+            "CRM No Potential (subtype kept) — no competing callback override.",
+            skip=True,
+            detail="no potential family",
+            conf="High",
+        )
+
     # Ambiguous → hand to V2 AI / Memory Match
     return ClassifyResult(
         account_no=acc,
@@ -308,29 +320,79 @@ def classify_lead(lead: dict[str, Any]) -> ClassifyResult:
     )
 
 
-def classify_leads(leads: list[dict[str, Any]]) -> dict[str, Any]:
-    results = [classify_lead(lead) for lead in leads]
-    skip = sum(1 for r in results if r.skip_ai)
+def _result_to_dict(r: ClassifyResult, *, cache_hit: bool = False) -> dict[str, Any]:
+    d: dict[str, Any] = {
+        "account no": r.account_no,
+        "Suggested Status": r.suggested_status,
+        "Validation Result": r.validation_result,
+        "Decision Source": r.decision_source,
+        "Reason": r.reason,
+        "Match Detail": r.match_detail,
+        "skipAI": r.skip_ai,
+        "Confidence": r.confidence,
+        "Engine Shadow": True,
+    }
+    if cache_hit:
+        d["cache_hit"] = True
+        d["Decision Source"] = f"{r.decision_source} (exact-cache)"
+    return d
+
+
+def classify_leads(
+    leads: list[dict[str, Any]],
+    *,
+    use_cache: bool = True,
+    gate: bool = True,
+) -> dict[str, Any]:
+    from exact_cache import ExactClassifyCache
+    from lead_gate import gate_leads
+
+    gate_issues: list[str] = []
+    work = leads
+    if gate:
+        work, gate_issues = gate_leads(leads)
+
+    cache = ExactClassifyCache() if use_cache else None
+    results: list[dict[str, Any]] = []
+    cache_hits = 0
+
+    for lead in work:
+        if cache is not None:
+            hit = cache.get(lead)
+            if hit and hit.get("skipAI") is True:
+                # Only reuse zero-token decisions
+                payload = {
+                    "account no": hit.get("account no") or lead.get("account no"),
+                    "Suggested Status": hit.get("Suggested Status"),
+                    "Validation Result": hit.get("Validation Result"),
+                    "Decision Source": str(hit.get("Decision Source") or "") + " (exact-cache)",
+                    "Reason": hit.get("Reason"),
+                    "Match Detail": hit.get("Match Detail"),
+                    "skipAI": True,
+                    "Confidence": hit.get("Confidence") or "High",
+                    "Engine Shadow": True,
+                    "cache_hit": True,
+                }
+                results.append(payload)
+                cache_hits += 1
+                continue
+
+        r = classify_lead(lead)
+        row = _result_to_dict(r)
+        if cache is not None and r.skip_ai:
+            cache.set(lead, {k: v for k, v in row.items() if k != "cache_hit"})
+        results.append(row)
+
+    skip = sum(1 for r in results if r.get("skipAI"))
     return {
         "ok": True,
         "token_cost": 0,
         "total": len(results),
         "skip_ai_count": skip,
         "ai_needed_count": len(results) - skip,
-        "leads": [
-            {
-                "account no": r.account_no,
-                "Suggested Status": r.suggested_status,
-                "Validation Result": r.validation_result,
-                "Decision Source": r.decision_source,
-                "Reason": r.reason,
-                "Match Detail": r.match_detail,
-                "skipAI": r.skip_ai,
-                "Confidence": r.confidence,
-                "Engine Shadow": True,
-            }
-            for r in results
-        ],
+        "cache_hits": cache_hits,
+        "gate_issues": gate_issues,
+        "leads": results,
     }
 
 

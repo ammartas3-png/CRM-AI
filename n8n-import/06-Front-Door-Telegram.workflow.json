@@ -1,0 +1,505 @@
+{
+  "name": "Telegram Front Door -> V2 Database-check",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message",
+          "callback_query"
+        ],
+        "additionalFields": {}
+      },
+      "id": "tg-trigger",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        300
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "q14sD9Geek2ExOku",
+          "name": "Telegram account"
+        }
+      },
+      "webhookId": "tg-front-door"
+    },
+    {
+      "parameters": {
+        "jsCode": "const update = $input.first().json;\n\nif (update.callback_query) {\n  const cb = update.callback_query;\n  return [{\n    json: {\n      route: 'callback',\n      callback_id: cb.id,\n      callback_data: cb.data,\n      chat_id: cb.message?.chat?.id,\n      user_id: String(cb.from?.id || '')\n    }\n  }];\n}\n\nconst message = update.message || {};\nconst chatId = message.chat?.id;\nconst text = message.text || '';\n\nif (typeof text === 'string' && text.startsWith('/start')) {\n  return [{ json: { route: 'start', chat_id: chatId } }];\n}\n\nif (message.document) {\n  return [{\n    json: {\n      route: 'document',\n      chat_id: chatId,\n      file_id: message.document.file_id,\n      file_name: message.document.file_name || 'upload.xlsx',\n      mime_type: message.document.mime_type || ''\n    }\n  }];\n}\n\nreturn [{ json: { route: 'other', chat_id: chatId } }];\n"
+      },
+      "id": "route",
+      "name": "Route Update",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "start",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "start"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "callback",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "callback"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "document",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "document"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "switch",
+      "name": "Switch Route",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chat_id }}",
+        "text": "Welcome! Tap Database check, then upload CSV (preferred) or XLSX.",
+        "additionalFields": {
+          "appendAttribution": false,
+          "replyMarkup": "inlineKeyboard",
+          "inlineKeyboard": {
+            "rows": [
+              {
+                "row": {
+                  "buttons": [
+                    {
+                      "text": "Database check",
+                      "additionalFields": {
+                        "callback_data": "database_check"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      },
+      "id": "start-msg",
+      "name": "Send Start",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        940,
+        100
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "q14sD9Geek2ExOku",
+          "name": "Telegram account"
+        }
+      },
+      "webhookId": "d33bd941-beb8-43b5-bd80-b46f3a97e3f7"
+    },
+    {
+      "parameters": {
+        "resource": "callback",
+        "operation": "answerQuery",
+        "queryId": "={{ $json.callback_id }}",
+        "additionalFields": {}
+      },
+      "id": "answer-cb",
+      "name": "Answer Callback",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        940,
+        280
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "q14sD9Geek2ExOku",
+          "name": "Telegram account"
+        }
+      },
+      "webhookId": "54b18f0c-027c-4fb6-8c99-1e0f7b5785d8"
+    },
+    {
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $('Route Update').item.json.chat_id }}",
+        "text": "Please send your database file (.csv preferred, or .xlsx).",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "ask-file",
+      "name": "Ask File",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1160,
+        280
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "q14sD9Geek2ExOku",
+          "name": "Telegram account"
+        }
+      },
+      "webhookId": "f1fe3ae3-9afc-416b-8380-c4178aadbae5"
+    },
+    {
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chat_id }}",
+        "text": "File received. Sending to Database Validator V2...",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "processing",
+      "name": "Processing",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        940,
+        480
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "q14sD9Geek2ExOku",
+          "name": "Telegram account"
+        }
+      },
+      "webhookId": "507f5fa5-249f-45b6-96fb-9a3afc2d422d"
+    },
+    {
+      "parameters": {
+        "jsCode": "const r=$('Route Update').item.json; return [{json:{chat_id:r.chat_id,file_id:r.file_id,file_name:r.file_name,mime_type:r.mime_type}}];"
+      },
+      "id": "restore",
+      "name": "Restore Meta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1160,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "get",
+        "fileId": "={{ $json.file_id }}",
+        "download": true,
+        "additionalFields": {}
+      },
+      "id": "download",
+      "name": "Download File",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1380,
+        480
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "q14sD9Geek2ExOku",
+          "name": "Telegram account"
+        }
+      },
+      "webhookId": "e85f2fd1-8dcb-422e-81ea-4f0dbbf14781"
+    },
+    {
+      "parameters": {
+        "jsCode": "const route = $('Route Update').item.json;\nconst item = $input.first();\nconst binary = item.binary || {};\nconst key = Object.keys(binary)[0];\nif (!key) throw new Error('Telegram download returned no binary');\nconst b = binary[key];\n// ensure filename present for V2 kind detection\nif (!b.fileName) b.fileName = route.file_name || 'upload.xlsx';\nif (!b.mimeType && route.mime_type) b.mimeType = route.mime_type;\nreturn [{\n  json: {\n    chat_id: route.chat_id,\n    file_name: b.fileName\n  },\n  binary: { file: b }\n}];\n"
+      },
+      "id": "prep",
+      "name": "Prepare Binary As file",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://ammartd20.app.n8n.cloud/webhook/Database-check",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "file"
+            },
+            {
+              "name": "chat_id",
+              "value": "={{ String($json.chat_id || $('Route Update').item.json.chat_id || '') }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "forward-v2",
+      "name": "Forward To V2 Webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1820,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $('Route Update').item.json.chat_id }}",
+        "text": "Validation started. V2 will send the Excel reports here when ready.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "ack",
+      "name": "Ack Started",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2040,
+        480
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "q14sD9Geek2ExOku",
+          "name": "Telegram account"
+        }
+      },
+      "webhookId": "56e881d2-e2e4-4d5a-b1f6-5a941571c3c1"
+    },
+    {
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chat_id }}",
+        "text": "Send /start then tap Database check and upload a CSV/XLSX file.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "other",
+      "name": "Other Hint",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        940,
+        680
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "q14sD9Geek2ExOku",
+          "name": "Telegram account"
+        }
+      },
+      "webhookId": "0f53b218-618f-4ea0-aa37-1be6b7f2c6c6"
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Route Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Update": {
+      "main": [
+        [
+          {
+            "node": "Switch Route",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch Route": {
+      "main": [
+        [
+          {
+            "node": "Send Start",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Answer Callback",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Processing",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Other Hint",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Answer Callback": {
+      "main": [
+        [
+          {
+            "node": "Ask File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Processing": {
+      "main": [
+        [
+          {
+            "node": "Restore Meta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Meta": {
+      "main": [
+        [
+          {
+            "node": "Download File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download File": {
+      "main": [
+        [
+          {
+            "node": "Prepare Binary As file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Binary As file": {
+      "main": [
+        [
+          {
+            "node": "Forward To V2 Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Forward To V2 Webhook": {
+      "main": [
+        [
+          {
+            "node": "Ack Started",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null
+}
