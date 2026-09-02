@@ -18,6 +18,8 @@ jobs:
           pip install -r services/rule-engine/requirements.txt
           pip install -r services/smart-layer/requirements.txt || true
           pip install pytest openpyxl pandas
+      - name: Rule system validate
+        run: python scripts/validate_rule_system.py
       - name: Unit + golden tests
         run: |
           python services/tests/test_crm_classify.py

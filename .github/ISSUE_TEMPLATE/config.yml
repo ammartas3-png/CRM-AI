@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Rule change guide
+    url: https://github.com/ammartas3-png/CRM-AI/blob/main/docs/RULE-CHANGE.md
+    about: How vault + golden + n8n rule updates work

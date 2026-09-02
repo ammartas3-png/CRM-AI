@@ -9,7 +9,10 @@
 | Live n8n **Memory Match** | Production mirror (n8n cloud cannot call localhost) |
 | Exact fingerprint cache | Safe reuse of skipAI decisions (not semantic) |
 
-Do **not** add CrewAI or semantic cache as the main engine.
+**How to change rules day-to-day:** [`docs/RULE-CHANGE.md`](RULE-CHANGE.md)  
+Issue template: `.github/ISSUE_TEMPLATE/rule-change.yml` · scaffold: `scripts/new_rule.py`
+
+Do **not** add CrewAI or semantic cache as the main engine. Obsidian is optional; GitHub markdown is enough.
 
 ## Status
 
