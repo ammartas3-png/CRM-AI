@@ -1,0 +1,351 @@
+{
+  "name": "Telegram Database Check (n8n Native + CrewAI + Memory)",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": ["message", "callback_query"]
+      },
+      "id": "telegram-trigger",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const update = $input.first().json;\n\nif (update.callback_query) {\n  return [{\n    json: {\n      route: 'callback',\n      callback_data: update.callback_query.data,\n      chat_id: update.callback_query.message.chat.id,\n      user_id: String(update.callback_query.from.id)\n    }\n  }];\n}\n\nconst message = update.message || {};\nconst chatId = message.chat?.id;\nconst userId = String(message.from?.id || 'unknown');\nconst text = message.text || '';\n\nif (text.startsWith('/start')) {\n  return [{ json: { route: 'start', chat_id: chatId, user_id: userId } }];\n}\n\nif (message.document) {\n  return [{\n    json: {\n      route: 'document',\n      chat_id: chatId,\n      user_id: userId,\n      file_id: message.document.file_id,\n      file_name: message.document.file_name,\n      mime_type: message.document.mime_type\n    }\n  }];\n}\n\nreturn [{ json: { route: 'other', chat_id: chatId, user_id: userId } }];"
+      },
+      "id": "route-update",
+      "name": "Route Update",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "start",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "start"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "callback",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "callback"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "document",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "document"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "switch-route",
+      "name": "Switch Route",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "Welcome! Tap the button below to start database check.",
+        "additionalFields": {
+          "replyMarkup": "inlineKeyboard",
+          "inlineKeyboard": {
+            "rows": [
+              {
+                "row": {
+                  "buttons": [
+                    {
+                      "text": "Database check",
+                      "additionalFields": {
+                        "callback_data": "database_check"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      },
+      "id": "send-start",
+      "name": "Send Start Button",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [940, 120]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "Please send your Excel file (.xlsx) or CSV (.csv)."
+      },
+      "id": "ask-file",
+      "name": "Ask For File",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [940, 300]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "File received. Converting and validating..."
+      },
+      "id": "processing-msg",
+      "name": "Processing Message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [940, 500]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $json.file_id }}"
+      },
+      "id": "download-file",
+      "name": "Download Telegram File",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1160, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CREWAI_SERVICE_URL || 'http://crewai-service:8080' }}/validate",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "user_id",
+              "value": "={{ $('Route Update').item.json.user_id }}"
+            },
+            {
+              "name": "chat_id",
+              "value": "={{ $('Route Update').item.json.chat_id }}"
+            },
+            {
+              "name": "source",
+              "value": "telegram"
+            },
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "data"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 180000
+        }
+      },
+      "id": "validate-with-crewai",
+      "name": "Validate With CrewAI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1380, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.MEMORY_SERVICE_URL || 'http://memory-service:8090' }}/memory/validation",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"user_id\": \"{{ $('Route Update').item.json.user_id }}\",\n  \"chat_id\": \"{{ $('Route Update').item.json.chat_id }}\",\n  \"file_name\": \"{{ $('Route Update').item.json.file_name }}\",\n  \"valid\": {{ $json.valid }},\n  \"issues\": {{ JSON.stringify($json.validation?.issues || []) }},\n  \"converted_to\": \"csv\",\n  \"message\": {{ JSON.stringify($json.message || '') }}\n}",
+        "options": {}
+      },
+      "id": "save-memory",
+      "name": "Save Validation Memory",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1600, 500]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Route Update').item.json.chat_id }}",
+        "text": "={{ $('Validate With CrewAI').item.json.message }}"
+      },
+      "id": "send-result-text",
+      "name": "Send Result Text",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1820, 420]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Route Update').item.json.chat_id }}",
+        "text": "Converted CSV file is attached.",
+        "additionalFields": {
+          "document": "={{ $('Validate With CrewAI').item.json.artifacts.csv_base64 }}",
+          "fileName": "={{ $('Validate With CrewAI').item.json.artifacts.csv_filename }}"
+        }
+      },
+      "id": "send-csv-file",
+      "name": "Send CSV File",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1820, 580]
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Route Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Update": {
+      "main": [
+        [
+          {
+            "node": "Switch Route",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch Route": {
+      "main": [
+        [
+          {
+            "node": "Send Start Button",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ask For File",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Processing Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Processing Message": {
+      "main": [
+        [
+          {
+            "node": "Download Telegram File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Telegram File": {
+      "main": [
+        [
+          {
+            "node": "Validate With CrewAI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate With CrewAI": {
+      "main": [
+        [
+          {
+            "node": "Save Validation Memory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Validation Memory": {
+      "main": [
+        [
+          {
+            "node": "Send Result Text",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send CSV File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "pinData": {}
+}

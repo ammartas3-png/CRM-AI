@@ -1,69 +1,141 @@
-# CRM-AI Telegram Bot (Vercel Webhook)
+# CRM-AI — Telegram Database Check Platform
 
-This project is configured for **Vercel deployment** using Telegram webhooks.
+Telegram üzerinden Excel/CSV yükleyip database check yapan sistem.
 
-## Bot flow
+## Mimari
 
-1. User sends `/start`
-2. Bot returns an inline button: **Database check**
-3. User taps the button and bot asks for an Excel file (`.xls` / `.xlsx`)
-4. Bot sends that file to:
-   `https://ammartd20.app.n8n.cloud/webhook-test/Database-check`
-5. Bot returns the webhook response back to the same user
-   - text/JSON responses are sent as a message
-   - binary responses are sent as a Telegram document
+```text
+Telegram (n8n Trigger)
+  -> CrewAI Service (/validate)
+      -> xlsx otomatik csv'ye çevrilir
+      -> Validator + Reporter ajanları
+  -> Memory Service (/memory/validation)
+      -> MCP uyumlu kalıcı hafıza (JSONL graph)
+  -> Telegram cevabı (metin + csv dosyası)
+```
 
-## Endpoints
+## Neden xlsx yerine işlemde CSV?
 
-- `/` - deployment landing page with setup links
-- `POST /api/telegram` - Telegram webhook receiver
-- `GET /api/set_webhook` - One-click webhook registration helper
-- `GET /api/webhook_info` - show Telegram webhook status
+Evet — **xlsx yükleyip içeride CSV'ye çevirmek daha uygun**:
 
-## Required Vercel environment variables
+| | xlsx | csv (işlem formatı) |
+|---|------|---------------------|
+| n8n node uyumu | Orta | Yüksek |
+| CrewAI / pandas analizi | Daha zor | Kolay |
+| Token/maliyet | Daha yüksek | Daha düşük |
+| Hata ayıklama | Zor | Kolay |
 
-- `TELEGRAM_BOT_TOKEN` (required)
+Kullanıcı yine `.xlsx` gönderir; servis otomatik `.csv`'ye çevirip öyle işler.
 
-## Optional environment variables
+---
 
-- `DATABASE_CHECK_WEBHOOK_URL`
-  - default: `https://ammartd20.app.n8n.cloud/webhook-test/Database-check`
-- `APP_BASE_URL`
-  - example: `https://your-project-name.vercel.app`
-  - used by `/api/set_webhook` when it cannot infer host headers
-- `TELEGRAM_WEBHOOK_SECRET`
-  - optional security header for Telegram webhook requests
-- `WEBHOOK_SETUP_KEY`
-  - optional key to protect `/api/set_webhook`
+## 1) Servisleri çalıştır
 
-## Deploy on Vercel
+```bash
+cp .env.example .env
+docker compose up --build -d
+```
 
-1. Import this repository into Vercel.
-2. Set at least:
-   - `TELEGRAM_BOT_TOKEN`
-3. Deploy.
-4. Register Telegram webhook:
-   - Open:
-     - `https://<your-vercel-domain>/api/set_webhook`
-   - If you configured `WEBHOOK_SETUP_KEY`:
-     - `https://<your-vercel-domain>/api/set_webhook?key=<your_key>`
-5. Confirm it returns `"ok": true`.
+Health check:
 
-After this, your bot is live on Vercel.
+- CrewAI: `http://localhost:8080/health`
+- Memory: `http://localhost:8090/health`
 
-## Troubleshooting (bot not responding)
+## 2) n8n workflow import
 
-1. Check function is reachable:
-   - `https://<your-vercel-domain>/api/telegram`
-   - should return a JSON health message
-2. Register webhook again:
-   - `https://<your-vercel-domain>/api/set_webhook`
-3. Verify webhook status:
-   - `https://<your-vercel-domain>/api/webhook_info`
-   - ensure `url` matches your Vercel domain and `last_error_message` is empty
-4. If you use `WEBHOOK_SETUP_KEY`, include:
-   - `?key=<your_key>` on `set_webhook` and `webhook_info` URLs
-5. If Telegram works but n8n does not trigger:
-   - your n8n Webhook node must accept `POST` requests
-   - in n8n editor test mode, use `/webhook-test/...` while "Listen for test event" is active
-   - for always-on production, use `/webhook/...` and keep the workflow active
+Import files:
+
+- `n8n/telegram-database-check.workflow.json` (ana Telegram akışı)
+- `n8n/mcp-database-check-tool.workflow.json` (MCP tool expose)
+
+Gerekli n8n env:
+
+- `CREWAI_SERVICE_URL`
+- `MEMORY_SERVICE_URL`
+
+Telegram credential: `@BotFather` token.
+
+## 3) MCP hafıza
+
+REST API (n8n HTTP node):
+
+- `POST /memory/validation`
+- `GET /memory/user/{user_id}/history`
+- `GET /memory/graph`
+
+Claude/Cursor MCP config örneği:
+
+- `mcp/claude-desktop.config.example.json`
+
+Resmi MCP memory server da kullanılabilir:
+
+```bash
+npx -y @modelcontextprotocol/server-memory
+```
+
+## 4) CrewAI microservice
+
+Endpoint:
+
+- `POST /validate` (multipart file upload)
+
+Davranış:
+
+1. `.xlsx` -> `.csv` dönüşümü
+2. Rule-based validation (duplicate, header, column mismatch)
+3. `OPENAI_API_KEY` varsa Validator + Reporter crew
+4. Key yoksa rule-based fallback (ücretsiz mod)
+
+---
+
+## API örnekleri
+
+### Validate file
+
+```bash
+curl -X POST "http://localhost:8080/validate" \
+  -F "file=@sample.xlsx" \
+  -F "user_id=123" \
+  -F "chat_id=456"
+```
+
+### Save memory
+
+```bash
+curl -X POST "http://localhost:8090/memory/validation" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id":"123",
+    "chat_id":"456",
+    "file_name":"sample.xlsx",
+    "valid":false,
+    "issues":["duplicate rows"],
+    "converted_to":"csv",
+    "message":"2 duplicate row found"
+  }'
+```
+
+---
+
+## Vercel bot (legacy)
+
+`api/telegram.py` hâlâ mevcut (fallback). Ana önerilen yol artık **n8n-native** akış.
+
+---
+
+## Test
+
+```bash
+python3 -m pip install openpyxl fastapi pydantic
+python3 services/tests/smoke_test.py
+```
+
+---
+
+## Önerilen rollout
+
+1. Docker servisleri ayağa kaldır
+2. n8n Telegram workflow import + activate
+3. `/start` -> Database check -> `.xlsx` gönder
+4. Memory history kontrol: `/memory/user/{id}/history`
+5. İsteğe bağlı MCP tool workflow publish
