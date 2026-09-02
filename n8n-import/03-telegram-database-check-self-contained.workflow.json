@@ -1,5 +1,5 @@
 {
-  "name": "Telegram Database Check (Self Contained)",
+  "name": "Telegram Database Check (Self Contained Fixed)",
   "nodes": [
     {
       "parameters": {
@@ -8,18 +8,18 @@
       "id": "telegram-trigger",
       "name": "Telegram Trigger",
       "type": "n8n-nodes-base.telegramTrigger",
-      "typeVersion": 1.1,
-      "position": [220, 300]
+      "typeVersion": 1.2,
+      "position": [200, 320]
     },
     {
       "parameters": {
-        "jsCode": "const update = $input.first().json;\n\nif (update.callback_query) {\n  return [{\n    json: {\n      route: 'callback',\n      callback_data: update.callback_query.data,\n      chat_id: update.callback_query.message.chat.id,\n      user_id: String(update.callback_query.from.id)\n    }\n  }];\n}\n\nconst message = update.message || {};\nconst chatId = message.chat?.id;\nconst userId = String(message.from?.id || 'unknown');\nconst text = message.text || '';\n\nif (text.startsWith('/start')) {\n  return [{ json: { route: 'start', chat_id: chatId, user_id: userId } }];\n}\n\nif (message.document) {\n  return [{\n    json: {\n      route: 'document',\n      chat_id: chatId,\n      user_id: userId,\n      file_id: message.document.file_id,\n      file_name: message.document.file_name || 'upload.xlsx',\n      mime_type: message.document.mime_type || ''\n    }\n  }];\n}\n\nreturn [{ json: { route: 'other', chat_id: chatId, user_id: userId } }];"
+        "jsCode": "const update = $input.first().json;\n\nif (update.callback_query) {\n  const cb = update.callback_query;\n  return [{\n    json: {\n      route: 'callback',\n      callback_id: cb.id,\n      callback_data: cb.data,\n      chat_id: cb.message?.chat?.id,\n      user_id: String(cb.from?.id || 'unknown')\n    }\n  }];\n}\n\nconst message = update.message || {};\nconst chatId = message.chat?.id;\nconst userId = String(message.from?.id || 'unknown');\nconst text = message.text || '';\n\nif (typeof text === 'string' && text.startsWith('/start')) {\n  return [{ json: { route: 'start', chat_id: chatId, user_id: userId } }];\n}\n\nif (message.document) {\n  const fileName = message.document.file_name || 'upload.xlsx';\n  const mimeType = message.document.mime_type || '';\n  const lower = fileName.toLowerCase();\n  let fileKind = 'unsupported';\n  if (lower.endsWith('.xlsx') || mimeType.includes('spreadsheetml')) fileKind = 'xlsx';\n  else if (lower.endsWith('.xls') || mimeType.includes('ms-excel')) fileKind = 'xls';\n  else if (lower.endsWith('.csv') || mimeType.includes('csv') || mimeType.includes('text/plain')) fileKind = 'csv';\n\n  return [{\n    json: {\n      route: 'document',\n      chat_id: chatId,\n      user_id: userId,\n      file_id: message.document.file_id,\n      file_name: fileName,\n      mime_type: mimeType,\n      file_kind: fileKind\n    }\n  }];\n}\n\nreturn [{ json: { route: 'other', chat_id: chatId, user_id: userId } }];"
       },
       "id": "route-update",
       "name": "Route Update",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [440, 300]
+      "position": [420, 320]
     },
     {
       "parameters": {
@@ -93,19 +93,23 @@
             }
           ]
         },
-        "options": {}
+        "options": {
+          "fallbackOutput": "extra"
+        }
       },
       "id": "switch-route",
       "name": "Switch Route",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.2,
-      "position": [660, 300]
+      "position": [640, 320]
     },
     {
       "parameters": {
+        "operation": "sendMessage",
         "chatId": "={{ $json.chat_id }}",
         "text": "Welcome! Tap the button below to start database check.",
         "additionalFields": {
+          "appendAttribution": false,
           "replyMarkup": "inlineKeyboard",
           "inlineKeyboard": {
             "rows": [
@@ -129,230 +133,432 @@
       "name": "Send Start Button",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [920, 100]
+      "position": [900, 80]
     },
     {
       "parameters": {
-        "chatId": "={{ $json.chat_id }}",
-        "text": "Please send your Excel file (.xlsx) or CSV (.csv)."
+        "resource": "callback",
+        "operation": "answerQuery",
+        "queryId": "={{ $json.callback_id }}",
+        "additionalFields": {}
+      },
+      "id": "answer-callback",
+      "name": "Answer Callback",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [900, 240]
+    },
+    {
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $('Route Update').item.json.chat_id }}",
+        "text": "Please send your Excel file (.xlsx / .xls) or CSV (.csv).",
+        "additionalFields": {
+          "appendAttribution": false
+        }
       },
       "id": "ask-file",
       "name": "Ask For File",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [920, 280]
+      "position": [1120, 240]
     },
     {
       "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.file_kind }}",
+              "rightValue": "unsupported",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-supported-file",
+      "name": "Is Supported File?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [900, 460]
+    },
+    {
+      "parameters": {
+        "operation": "sendMessage",
         "chatId": "={{ $json.chat_id }}",
-        "text": "File received. Converting and validating..."
+        "text": "Unsupported file. Please send .xlsx, .xls or .csv",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "unsupported-file-msg",
+      "name": "Unsupported File Message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1140, 620]
+    },
+    {
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chat_id }}",
+        "text": "File received. Converting and validating...",
+        "additionalFields": {
+          "appendAttribution": false
+        }
       },
       "id": "processing-msg",
       "name": "Processing Message",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [920, 500]
+      "position": [1140, 420]
     },
     {
       "parameters": {
-        "jsCode": "const route = $('Route Update').item.json;\nreturn [{\n  json: {\n    chat_id: route.chat_id,\n    user_id: route.user_id,\n    file_id: route.file_id,\n    file_name: route.file_name,\n    mime_type: route.mime_type\n  }\n}];"
+        "jsCode": "const route = $('Route Update').item.json;\nreturn [{\n  json: {\n    chat_id: route.chat_id,\n    user_id: route.user_id,\n    file_id: route.file_id,\n    file_name: route.file_name,\n    mime_type: route.mime_type,\n    file_kind: route.file_kind\n  }\n}];"
       },
       "id": "restore-file-meta",
       "name": "Restore File Meta",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1140, 500]
+      "position": [1360, 420]
     },
     {
       "parameters": {
         "resource": "file",
-        "fileId": "={{ $json.file_id }}"
+        "operation": "get",
+        "fileId": "={{ $json.file_id }}",
+        "download": true,
+        "additionalFields": {}
       },
       "id": "download-file",
       "name": "Download Telegram File",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [1360, 500]
+      "position": [1580, 420],
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
-        "operation": "fromFile",
-        "fileFormat": "autodetect",
-        "options": {
-          "headerRow": true,
-          "rawData": false
+        "jsCode": "const route = $('Route Update').item.json;\nconst item = $input.first();\nconst binary = item.binary || {};\nconst binaryKey = Object.keys(binary)[0];\nif (!binaryKey) {\n  return [{\n    json: {\n      ok: false,\n      chat_id: route.chat_id,\n      message: 'Could not download the file from Telegram. Please try again.'\n    }\n  }];\n}\n\nconst fileKind = route.file_kind || 'xlsx';\nreturn [{\n  json: {\n    ok: true,\n    chat_id: route.chat_id,\n    user_id: route.user_id,\n    file_name: route.file_name,\n    file_kind: fileKind,\n    binary_key: binaryKey\n  },\n  binary: {\n    data: binary[binaryKey]\n  }\n}];"
+      },
+      "id": "normalize-binary",
+      "name": "Normalize Binary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1800, 360]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "has-binary",
+      "name": "Has Binary?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1900, 360]
+    },
+    {
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $('Route Update').item.json.chat_id }}",
+        "text": "Download failed. Please send the file again.",
+        "additionalFields": {
+          "appendAttribution": false
         }
       },
-      "id": "read-spreadsheet",
-      "name": "Read Spreadsheet",
-      "type": "n8n-nodes-base.spreadsheetFile",
-      "typeVersion": 2,
-      "position": [1580, 500]
+      "id": "download-error-msg",
+      "name": "Download Error Message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1800, 560]
     },
     {
       "parameters": {
-        "jsCode": "const route = $('Route Update').item.json;\nconst items = $input.all();\nconst rows = items.map((item) => item.json);\n\nif (!rows.length) {\n  return [{\n    json: {\n      chat_id: route.chat_id,\n      user_id: route.user_id,\n      file_name: route.file_name,\n      valid: false,\n      message: 'Database check failed: file is empty or could not be parsed.',\n      issues: ['Empty file'],\n      columns: 0,\n      total_rows: 0,\n      non_empty_rows: 0,\n      duplicate_rows: 0,\n      header: [],\n      csv_rows: []\n    }\n  }];\n}\n\nconst header = Object.keys(rows[0] || {});\nconst dataRows = rows.map((row) => header.map((key) => {\n  const value = row[key];\n  return value === undefined || value === null ? '' : String(value);\n}));\n\nconst nonEmptyRows = dataRows.filter((row) => row.some((cell) => String(cell).trim() !== ''));\nconst unique = new Set(nonEmptyRows.map((row) => JSON.stringify(row)));\nconst duplicateRows = nonEmptyRows.length - unique.size;\nconst emptyHeaderCells = header.filter((h) => !String(h).trim()).length;\n\nconst issues = [];\nif (!header.length) issues.push('Header row is missing.');\nif (emptyHeaderCells) issues.push(`${emptyHeaderCells} empty header cell(s) found.`);\nif (!nonEmptyRows.length) issues.push('No data rows found after header.');\nif (duplicateRows > 0) issues.push(`${duplicateRows} duplicate data row(s) found.`);\n\nconst valid = issues.length === 0;\nlet message = '';\nif (valid) {\n  message = `Database check completed successfully.\\nRows: ${nonEmptyRows.length}\\nColumns: ${header.length}\\nConverted to CSV and ready.`;\n} else {\n  message = `Database check found issues:\\n- ${issues.join('\\n- ')}\\n\\nRows: ${nonEmptyRows.length}\\nColumns: ${header.length}`;\n}\n\nconst csvRows = [header, ...dataRows];\n\nreturn [{\n  json: {\n    chat_id: route.chat_id,\n    user_id: route.user_id,\n    file_name: route.file_name,\n    valid,\n    message,\n    issues,\n    columns: header.length,\n    total_rows: dataRows.length,\n    non_empty_rows: nonEmptyRows.length,\n    duplicate_rows: duplicateRows,\n    header,\n    csv_rows: csvRows\n  }\n}];"
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.file_kind }}",
+                    "rightValue": "csv",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "csv"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.file_kind }}",
+                    "rightValue": "xls",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "xls"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.file_kind }}",
+                    "rightValue": "xlsx",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "xlsx"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "switch-file-kind",
+      "name": "Switch File Kind",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [2020, 360]
+    },
+    {
+      "parameters": {
+        "operation": "csv",
+        "options": {
+          "headerRow": true
+        }
+      },
+      "id": "extract-csv",
+      "name": "Extract CSV",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [2260, 180],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "xls",
+        "options": {
+          "headerRow": true
+        }
+      },
+      "id": "extract-xls",
+      "name": "Extract XLS",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [2260, 360],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "options": {
+          "headerRow": true
+        }
+      },
+      "id": "extract-xlsx",
+      "name": "Extract XLSX",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [2260, 540],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const route = $('Route Update').item.json;\nconst items = $input.all();\nconst rows = items\n  .map((item) => item.json)\n  .filter((row) => row && typeof row === 'object' && !row.error && Object.keys(row).length > 0);\n\nif (!rows.length) {\n  return [{\n    json: {\n      chat_id: route.chat_id,\n      user_id: route.user_id,\n      file_name: route.file_name,\n      valid: false,\n      message: 'Database check failed: file is empty or could not be parsed as spreadsheet/CSV.',\n      issues: ['Empty or unreadable file'],\n      columns: 0,\n      total_rows: 0,\n      non_empty_rows: 0,\n      duplicate_rows: 0,\n      header: [],\n      csv_rows: []\n    }\n  }];\n}\n\nconst header = Object.keys(rows[0] || {});\nconst dataRows = rows.map((row) => header.map((key) => {\n  const value = row[key];\n  return value === undefined || value === null ? '' : String(value);\n}));\n\nconst nonEmptyRows = dataRows.filter((row) => row.some((cell) => String(cell).trim() !== ''));\nconst unique = new Set(nonEmptyRows.map((row) => JSON.stringify(row)));\nconst duplicateRows = nonEmptyRows.length - unique.size;\nconst emptyHeaderCells = header.filter((h) => !String(h).trim()).length;\n\nconst issues = [];\nif (!header.length) issues.push('Header row is missing.');\nif (emptyHeaderCells) issues.push(`${emptyHeaderCells} empty header cell(s) found.`);\nif (!nonEmptyRows.length) issues.push('No data rows found after header.');\nif (duplicateRows > 0) issues.push(`${duplicateRows} duplicate data row(s) found.`);\n\nconst valid = issues.length === 0;\nconst message = valid\n  ? `Database check completed successfully.\\nRows: ${nonEmptyRows.length}\\nColumns: ${header.length}\\nConverted to CSV.`\n  : `Database check found issues:\\n- ${issues.join('\\n- ')}\\n\\nRows: ${nonEmptyRows.length}\\nColumns: ${header.length}`;\n\nreturn [{\n  json: {\n    chat_id: route.chat_id,\n    user_id: route.user_id,\n    file_name: route.file_name,\n    valid,\n    message,\n    issues,\n    columns: header.length,\n    total_rows: dataRows.length,\n    non_empty_rows: nonEmptyRows.length,\n    duplicate_rows: duplicateRows,\n    header,\n    csv_rows: [header, ...dataRows]\n  }\n}];"
       },
       "id": "validate-rows",
       "name": "Validate Rows",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1800, 500]
+      "position": [2500, 360]
     },
     {
       "parameters": {
-        "jsCode": "const data = $input.first().json;\nconst csvRows = data.csv_rows || [];\n\nfunction escapeCsv(value) {\n  const text = value === undefined || value === null ? '' : String(value);\n  if (/[\",\\n\\r]/.test(text)) {\n    return `\"${text.replace(/\"/g, '\"\"')}\"`;\n  }\n  return text;\n}\n\nconst csvText = csvRows.map((row) => row.map(escapeCsv).join(',')).join('\\n');\nconst baseName = String(data.file_name || 'database').replace(/\\.[^.]+$/, '');\nconst csvFileName = `${baseName}.csv`;\n\nreturn [{\n  json: {\n    chat_id: data.chat_id,\n    user_id: data.user_id,\n    file_name: data.file_name,\n    valid: data.valid,\n    message: data.message,\n    issues: data.issues,\n    csv_filename: csvFileName\n  },\n  binary: {\n    data: {\n      data: Buffer.from(csvText, 'utf8').toString('base64'),\n      mimeType: 'text/csv',\n      fileName: csvFileName,\n      fileExtension: 'csv'\n    }\n  }\n}];"
+        "jsCode": "const data = $input.first().json;\nconst csvRows = data.csv_rows || [];\n\nfunction escapeCsv(value) {\n  const text = value === undefined || value === null ? '' : String(value);\n  if (/[\",\\n\\r]/.test(text)) {\n    return `\"${text.replace(/\"/g, '\"\"')}\"`;\n  }\n  return text;\n}\n\nconst csvText = csvRows.map((row) => (row || []).map(escapeCsv).join(',')).join('\\n');\nconst baseName = String(data.file_name || 'database').replace(/\\.[^.]+$/, '');\nconst csvFileName = `${baseName || 'database'}.csv`;\n\nreturn [{\n  json: {\n    chat_id: data.chat_id,\n    user_id: data.user_id,\n    file_name: data.file_name,\n    valid: data.valid,\n    message: data.message,\n    issues: data.issues || [],\n    csv_filename: csvFileName\n  },\n  binary: {\n    data: await this.helpers.prepareBinaryData(Buffer.from(csvText, 'utf8'), csvFileName, 'text/csv')\n  }\n}];"
       },
       "id": "build-csv",
       "name": "Build CSV File",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2020, 500]
+      "position": [2720, 360]
     },
     {
       "parameters": {
+        "operation": "sendMessage",
         "chatId": "={{ $json.chat_id }}",
-        "text": "={{ $json.message }}"
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
       },
       "id": "send-result-text",
       "name": "Send Result Text",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [2240, 420]
+      "position": [2940, 260]
     },
     {
       "parameters": {
+        "resource": "message",
         "operation": "sendDocument",
         "chatId": "={{ $json.chat_id }}",
         "binaryData": true,
         "binaryPropertyName": "data",
         "additionalFields": {
-          "caption": "Converted CSV file"
+          "caption": "Converted CSV file",
+          "fileName": "={{ $json.csv_filename }}"
         }
       },
       "id": "send-csv-file",
       "name": "Send CSV File",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [2240, 600]
+      "position": [2940, 460]
+    },
+    {
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chat_id }}",
+        "text": "Send /start and tap Database check, then upload .xlsx / .xls / .csv",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "other-msg",
+      "name": "Other Message Hint",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [900, 760]
     }
   ],
   "connections": {
     "Telegram Trigger": {
-      "main": [
-        [
-          {
-            "node": "Route Update",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "Route Update", "type": "main", "index": 0 }]]
     },
     "Route Update": {
-      "main": [
-        [
-          {
-            "node": "Switch Route",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "Switch Route", "type": "main", "index": 0 }]]
     },
     "Switch Route": {
       "main": [
-        [
-          {
-            "node": "Send Start Button",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Ask For File",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Processing Message",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [{ "node": "Send Start Button", "type": "main", "index": 0 }],
+        [{ "node": "Answer Callback", "type": "main", "index": 0 }],
+        [{ "node": "Is Supported File?", "type": "main", "index": 0 }],
+        [{ "node": "Other Message Hint", "type": "main", "index": 0 }]
+      ]
+    },
+    "Answer Callback": {
+      "main": [[{ "node": "Ask For File", "type": "main", "index": 0 }]]
+    },
+    "Is Supported File?": {
+      "main": [
+        [{ "node": "Processing Message", "type": "main", "index": 0 }],
+        [{ "node": "Unsupported File Message", "type": "main", "index": 0 }]
       ]
     },
     "Processing Message": {
-      "main": [
-        [
-          {
-            "node": "Restore File Meta",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "Restore File Meta", "type": "main", "index": 0 }]]
     },
     "Restore File Meta": {
-      "main": [
-        [
-          {
-            "node": "Download Telegram File",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "Download Telegram File", "type": "main", "index": 0 }]]
     },
     "Download Telegram File": {
       "main": [
-        [
-          {
-            "node": "Read Spreadsheet",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [{ "node": "Normalize Binary", "type": "main", "index": 0 }],
+        [{ "node": "Download Error Message", "type": "main", "index": 0 }]
       ]
     },
-    "Read Spreadsheet": {
+    "Normalize Binary": {
+      "main": [[{ "node": "Has Binary?", "type": "main", "index": 0 }]]
+    },
+    "Has Binary?": {
       "main": [
-        [
-          {
-            "node": "Validate Rows",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [{ "node": "Switch File Kind", "type": "main", "index": 0 }],
+        [{ "node": "Download Error Message", "type": "main", "index": 0 }]
       ]
+    },
+    "Switch File Kind": {
+      "main": [
+        [{ "node": "Extract CSV", "type": "main", "index": 0 }],
+        [{ "node": "Extract XLS", "type": "main", "index": 0 }],
+        [{ "node": "Extract XLSX", "type": "main", "index": 0 }]
+      ]
+    },
+    "Extract CSV": {
+      "main": [[{ "node": "Validate Rows", "type": "main", "index": 0 }]]
+    },
+    "Extract XLS": {
+      "main": [[{ "node": "Validate Rows", "type": "main", "index": 0 }]]
+    },
+    "Extract XLSX": {
+      "main": [[{ "node": "Validate Rows", "type": "main", "index": 0 }]]
     },
     "Validate Rows": {
-      "main": [
-        [
-          {
-            "node": "Build CSV File",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "Build CSV File", "type": "main", "index": 0 }]]
     },
     "Build CSV File": {
       "main": [
         [
-          {
-            "node": "Send Result Text",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Send CSV File",
-            "type": "main",
-            "index": 0
-          }
+          { "node": "Send Result Text", "type": "main", "index": 0 },
+          { "node": "Send CSV File", "type": "main", "index": 0 }
         ]
       ]
     }
