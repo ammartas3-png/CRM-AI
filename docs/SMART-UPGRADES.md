@@ -41,3 +41,15 @@ Manual Entry and 5UP files were already slim and are unchanged.
 
 Create a tab named exactly `Decision_Memory` in spreadsheet `CRM_AI_Rules`.
 If missing, append node continues without failing the run.
+
+## Accuracy fixes (2026-09-02)
+
+Applied after reviewing execution #1114 input vs output:
+
+1. **Canonical status compare** — `No Potential - no documents` ≡ `No Potential` (stops false Wrong + Manual Entry noise)
+2. **Keep sheet subtype on no_money** — preserve `No Potential - no documents` instead of collapsing
+3. **Merge continuation comment lines** — multiline bodies keep timestamp so `cb tmrw` stays with the talk
+4. **busy_after_pickup** — `pu ... busy/lm` is Call Again, not `no_real_conversation`
+5. **Stale callback then NA** — newer `rej`/`navm` overrides older Call Again
+6. **Appointment timestamp false positives** — reject metadata dates as `When To Call`
+7. **AI prompts** — money+concrete callback → Call Again; Appointment AI anti-false-positive rules
