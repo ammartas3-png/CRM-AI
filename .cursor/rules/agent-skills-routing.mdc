@@ -1,0 +1,17 @@
+---
+description: Route CRM development tasks to addyosmani agent-skills workflows
+alwaysApply: true
+---
+
+For software delivery tasks, prefer skills in `.cursor/skills/` from the
+agent-skills pack. Start with `using-agent-skills` to pick the right workflow.
+
+Common routes:
+- New feature / spec → `spec-driven-development`, `incremental-implementation`
+- Tests first → `test-driven-development`
+- Review → `code-review-and-quality`
+- Security → `security-and-hardening`
+- API design → `api-and-interface-design`
+- Ship / deploy → `shipping-and-launch`
+
+Combine with ECC agents (`ecc-planner`, `ecc-architect`) when planning is needed.

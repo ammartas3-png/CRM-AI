@@ -6,6 +6,12 @@
         "-y",
         "chrome-devtools-mcp@latest"
       ]
+    },
+    "llmlingua-compressor": {
+      "command": "python3",
+      "args": [
+        ".cursor/scripts/mcp_llmlingua.py"
+      ]
     }
   }
 }
