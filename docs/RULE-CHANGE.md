@@ -62,7 +62,30 @@ python3 -m pytest -q services/tests/test_golden_classify.py
 | n8n **Memory Match** | Canlı Telegram motoru |
 | Google Sheet | Sadece `human_approved=true` tetikleyiciler |
 
-## Telegram status survey (live)
+## Telegram Rules brain (live)
+
+On `/start` choose **Rules brain** (next to Database check).
+
+```text
+You chat in Telegram
+        │
+        ▼
+Front Door loads Google Sheet triggers + canonical rules
+        │
+        ▼
+OpenAI replies: which rule applies / why Wrong / draft a change
+        │
+        ▼
+You reply CONFIRM → draft saved to Decision_Memory (rule_draft)
+        │
+        ▼
+Then vault + golden + Memory Match (Cursor / rule-change flow)
+```
+
+- Paste a comment → “bu hangi kural?”
+- “Şunu değiştirelim…” → draft; `CONFIRM` saves
+- `/exit` leaves chat mode
+- Does **not** auto-edit Memory Match; that stays the rule-change checklist
 
 After each run summary, V2 may send up to **12** uncertain leads as normal Telegram messages with status buttons (Call Again, No Answer, Recall, …). No n8n links.
 
