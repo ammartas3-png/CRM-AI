@@ -27,7 +27,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const update = $input.first().json;\nconst sd = $getWorkflowStaticData('global');\n\nif (update.callback_query) {\n  const cb = update.callback_query;\n  const data = String(cb.data || '');\n  const chatId = cb.message?.chat?.id;\n\n  if (data.startsWith('v|')) {\n    const parts = data.split('|');\n    const account = parts[1] || '';\n    const code = parts[2] || '';\n    const STATUS = {\n      ca: 'Call Again', na: 'No Answer 1-5', n5: 'No Answer 5 UP', rc: 'Recall',\n      ni: 'No Interest', np: 'No Potential', wn: 'Wrong Number or Email',\n      dr: 'Denied Registration', keep: 'Keep CRM'\n    };\n    const status = STATUS[code] || code;\n    if (!Array.isArray(sd.humanVotes)) sd.humanVotes = [];\n    sd.humanVotes.push({ account, status, code, chat_id: chatId, at: new Date().toISOString() });\n    if (sd.humanVotes.length > 200) sd.humanVotes = sd.humanVotes.slice(-200);\n    return [{ json: {\n      route: 'vote', callback_id: cb.id, callback_data: data, chat_id: chatId,\n      account, status, code, vote_ack: `Saved: ${account} → ${status}`\n    }}];\n  }\n\n  if (data === 'rules_chat') {\n    sd.mode = 'rules';\n    sd.chatHistory = [];\n    return [{ json: { route: 'rules_enter', callback_id: cb.id, callback_data: data, chat_id: chatId } }];\n  }\n\n  if (data === 'rules_exit') {\n    sd.mode = '';\n    sd.chatHistory = [];\n    sd.pendingProposal = null;\n    return [{ json: { route: 'rules_exit', callback_id: cb.id, callback_data: data, chat_id: chatId } }];\n  }\n\n  if (data === 'database_check') sd.mode = '';\n  return [{ json: {\n    route: 'callback', callback_id: cb.id, callback_data: data, chat_id: chatId,\n    user_id: String(cb.from?.id || '')\n  }}];\n}\n\nconst message = update.message || {};\nconst chatId = message.chat?.id;\nconst text = String(message.text || '').trim();\n\nif (text.startsWith('/start')) {\n  sd.mode = '';\n  return [{ json: { route: 'start', chat_id: chatId } }];\n}\n\nif (message.document) {\n  return [{ json: {\n    route: 'document', chat_id: chatId,\n    file_id: message.document.file_id,\n    file_name: message.document.file_name || 'upload.xlsx',\n    mime_type: message.document.mime_type || ''\n  }}];\n}\n\nif (/^\\/(exit|done|menu)$/i.test(text) || /^exit$/i.test(text)) {\n  sd.mode = '';\n  sd.chatHistory = [];\n  sd.pendingProposal = null;\n  return [{ json: { route: 'rules_exit', chat_id: chatId, text } }];\n}\n\nif (sd.mode === 'rules' && text) {\n  return [{ json: { route: 'rules_msg', chat_id: chatId, text, is_confirm: /^confirm$/i.test(text) } }];\n}\n\nreturn [{ json: { route: 'other', chat_id: chatId, text } }];\n"
+        "jsCode": "const update = $input.first().json;\nconst sd = $getWorkflowStaticData('global');\n\nif (update.callback_query) {\n  const cb = update.callback_query;\n  const data = String(cb.data || '');\n  const chatId = cb.message?.chat?.id;\n\n  if (data.startsWith('v|')) {\n    const parts = data.split('|');\n    const account = parts[1] || '';\n    const code = parts[2] || '';\n    const STATUS = {\n      ca: 'Call Again', na: 'No Answer 1-5', n5: 'No Answer 5 UP', rc: 'Recall',\n      ni: 'No Interest', np: 'No Potential', wn: 'Wrong Number or Email',\n      dr: 'Denied Registration', keep: 'Keep CRM'\n    };\n    const status = STATUS[code] || code;\n    if (!Array.isArray(sd.humanVotes)) sd.humanVotes = [];\n    sd.humanVotes.push({ account, status, code, chat_id: chatId, at: new Date().toISOString() });\n    if (sd.humanVotes.length > 200) sd.humanVotes = sd.humanVotes.slice(-200);\n    return [{ json: {\n      route: 'vote', callback_id: cb.id, callback_data: data, chat_id: chatId,\n      account, status, code, vote_ack: `Saved: ${account} → ${status}`\n    }}];\n  }\n\n  if (data === 'rules_chat') {\n    sd.mode = 'rules';\n    sd.chatHistory = [];\n    return [{ json: { route: 'rules_enter', callback_id: cb.id, callback_data: data, chat_id: chatId } }];\n  }\n\n  if (data === 'rules_exit') {\n    sd.mode = '';\n    sd.chatHistory = [];\n    sd.pendingProposal = null;\n    return [{ json: { route: 'rules_exit', callback_id: cb.id, callback_data: data, chat_id: chatId } }];\n  }\n\n  if (data === 'database_check') sd.mode = '';\n  return [{ json: {\n    route: 'callback', callback_id: cb.id, callback_data: data, chat_id: chatId,\n    user_id: String(cb.from?.id || '')\n  }}];\n}\n\nconst message = update.message || {};\nconst chatId = message.chat?.id;\nconst text = String(message.text || '').trim();\nconst low = text.toLowerCase();\n\nif (text.startsWith('/start') || low === 'menu' || low === '/menu') {\n  sd.mode = '';\n  return [{ json: { route: 'start', chat_id: chatId } }];\n}\n\nif (message.document) {\n  return [{ json: {\n    route: 'document', chat_id: chatId,\n    file_id: message.document.file_id,\n    file_name: message.document.file_name || 'upload.xlsx',\n    mime_type: message.document.mime_type || ''\n  }}];\n}\n\n// Text menu aliases (if buttons still missing)\nif (low === '1' || low === 'database' || low === 'database check' || low === 'db' || low === 'check') {\n  sd.mode = '';\n  return [{ json: { route: 'callback', callback_id: '', callback_data: 'database_check', chat_id: chatId, from_text: true } }];\n}\nif (low === '2' || low === 'rules' || low === 'rules brain' || low === 'brain' || low === 'kural') {\n  sd.mode = 'rules';\n  sd.chatHistory = [];\n  return [{ json: { route: 'rules_enter', callback_id: '', callback_data: 'rules_chat', chat_id: chatId, from_text: true } }];\n}\n\nif (/^\\/(exit|done|menu)$/i.test(text) || /^exit$/i.test(text)) {\n  sd.mode = '';\n  sd.chatHistory = [];\n  sd.pendingProposal = null;\n  return [{ json: { route: 'rules_exit', chat_id: chatId, text } }];\n}\n\nif (sd.mode === 'rules' && text) {\n  return [{ json: { route: 'rules_msg', chat_id: chatId, text, is_confirm: /^confirm$/i.test(text) } }];\n}\n\nreturn [{ json: { route: 'other', chat_id: chatId, text } }];\n"
       },
       "id": "route",
       "name": "Route Update",
@@ -215,20 +215,18 @@
       "parameters": {
         "operation": "sendMessage",
         "chatId": "={{ $json.chat_id }}",
-        "text": "Welcome! Choose:\n• Database check — upload CRM Excel/CSV\n• Rules brain — talk about rules (which rule applies, propose changes)",
+        "text": "Welcome!\n\nUse the buttons below, or type:\n1 = Database check (upload Excel)\n2 = Rules brain (chat about rules)",
         "additionalFields": {
           "appendAttribution": false,
-          "replyMarkup": "inlineKeyboard",
-          "inlineKeyboard": {
+          "replyMarkup": "replyKeyboard",
+          "replyKeyboard": {
             "rows": [
               {
                 "row": {
                   "buttons": [
                     {
                       "text": "Database check",
-                      "additionalFields": {
-                        "callback_data": "database_check"
-                      }
+                      "additionalFields": {}
                     }
                   ]
                 }
@@ -238,24 +236,26 @@
                   "buttons": [
                     {
                       "text": "Rules brain",
-                      "additionalFields": {
-                        "callback_data": "rules_chat"
-                      }
+                      "additionalFields": {}
                     }
                   ]
                 }
               }
             ]
+          },
+          "replyKeyboardOptions": {
+            "resize_keyboard": true,
+            "one_time_keyboard": false
           }
         }
       },
-      "id": "start-msg",
+      "id": "send-start",
       "name": "Send Start",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        940,
-        100
+        720,
+        200
       ],
       "credentials": {
         "telegramApi": {
@@ -263,7 +263,7 @@
           "name": "Telegram account"
         }
       },
-      "webhookId": "d33bd941-beb8-43b5-bd80-b46f3a97e3f7"
+      "webhookId": "send-start-menu"
     },
     {
       "parameters": {
@@ -454,7 +454,7 @@
       "parameters": {
         "operation": "sendMessage",
         "chatId": "={{ $json.chat_id }}",
-        "text": "Use /start and pick a button:\n• Database check — send a file\n• Rules brain — chat about CRM rules\nOr send an Excel/CSV anytime.",
+        "text": "Menu:\nSend /start\nOr type: 1 (Database check) / 2 (Rules brain)\nOr send an Excel/CSV anytime.",
         "additionalFields": {
           "appendAttribution": false
         }
@@ -599,34 +599,12 @@
     },
     {
       "parameters": {
-        "operation": "sendMessage",
-        "chatId": "={{ $json.chat_id }}",
-        "text": "Rules brain is on. Talk like a teammate:\n• Paste a comment/lead → which rule applies\n• Ask why a status is Wrong\n• Propose a change → I draft it; reply CONFIRM to save\n• /exit to leave",
-        "additionalFields": {
-          "appendAttribution": false,
-          "replyMarkup": "inlineKeyboard",
-          "inlineKeyboard": {
-            "rows": [
-              {
-                "row": {
-                  "buttons": [
-                    {
-                      "text": "Exit rules brain",
-                      "additionalFields": {
-                        "callback_data": "rules_exit"
-                      }
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        }
+        "jsCode": "const chatId = $input.first().json.chat_id;\nconst creds = await this.getCredentials('telegramApi');\nconst token = creds.accessToken || creds.token || creds.botToken;\nconst res = await this.helpers.httpRequest({\n  method: 'POST',\n  url: `https://api.telegram.org/bot${token}/sendMessage`,\n  headers: { 'Content-Type': 'application/json' },\n  body: {\n    chat_id: chatId,\n    text: \"Rules brain is on.\\n• Paste a comment/lead → which rule applies\\n• Ask why a status is Wrong\\n• Propose a change → I draft it; reply CONFIRM to save\\n• Type exit or tap Exit\",\n    reply_markup: {\n      inline_keyboard: [\n        [{ text: \"Exit rules brain\", callback_data: \"rules_exit\" }]\n      ]\n    }\n  },\n  json: true,\n});\nreturn [{ json: { ok: !!res.ok, chat_id: chatId, has_keyboard: !!(res.result && res.result.reply_markup) } }];\n"
       },
       "id": "rules-welcome",
       "name": "Rules Welcome",
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         1160,
         900
@@ -636,8 +614,7 @@
           "id": "q14sD9Geek2ExOku",
           "name": "Telegram account"
         }
-      },
-      "webhookId": "9fd5c4d8-4652-493a-ab6c-9fccbce182aa"
+      }
     },
     {
       "parameters": {
@@ -1049,6 +1026,70 @@
         }
       },
       "webhookId": "b8db263d-c2b2-49a6-bc2b-4feb0ef2ef61"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "has-cb",
+              "leftValue": "={{ $json.callback_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "callback-gate",
+      "name": "Callback Gate",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        720,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "has-cb2",
+              "leftValue": "={{ $json.callback_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "enter-has-cb",
+      "name": "Enter Has Callback",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        720,
+        900
+      ]
     }
   ],
   "connections": {
@@ -1085,7 +1126,7 @@
         ],
         [
           {
-            "node": "Answer Callback",
+            "node": "Callback Gate",
             "type": "main",
             "index": 0
           }
@@ -1106,7 +1147,7 @@
         ],
         [
           {
-            "node": "Answer Rules Enter",
+            "node": "Enter Has Callback",
             "type": "main",
             "index": 0
           }
@@ -1385,10 +1426,50 @@
           }
         ]
       ]
+    },
+    "Callback Gate": {
+      "main": [
+        [
+          {
+            "node": "Answer Callback",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ask File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enter Has Callback": {
+      "main": [
+        [
+          {
+            "node": "Answer Rules Enter",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rules Welcome",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
     "executionOrder": "v1"
   },
-  "staticData": null
+  "staticData": {
+    "global": {
+      "mode": ""
+    }
+  }
 }
