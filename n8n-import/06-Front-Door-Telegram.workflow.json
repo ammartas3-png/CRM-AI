@@ -599,12 +599,40 @@
     },
     {
       "parameters": {
-        "jsCode": "const chatId = $input.first().json.chat_id;\nconst creds = await this.getCredentials('telegramApi');\nconst token = creds.accessToken || creds.token || creds.botToken;\nconst res = await this.helpers.httpRequest({\n  method: 'POST',\n  url: `https://api.telegram.org/bot${token}/sendMessage`,\n  headers: { 'Content-Type': 'application/json' },\n  body: {\n    chat_id: chatId,\n    text: \"Rules brain is on.\\n• Paste a comment/lead → which rule applies\\n• Ask why a status is Wrong\\n• Propose a change → I draft it; reply CONFIRM to save\\n• Type exit or tap Exit\",\n    reply_markup: {\n      inline_keyboard: [\n        [{ text: \"Exit rules brain\", callback_data: \"rules_exit\" }]\n      ]\n    }\n  },\n  json: true,\n});\nreturn [{ json: { ok: !!res.ok, chat_id: chatId, has_keyboard: !!(res.result && res.result.reply_markup) } }];\n"
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chat_id }}",
+        "text": "Rules brain is ON.\n\nSend me:\n• a CRM comment / lead notes → I say which rule applies\n• a question about a status\n• a change you want → I draft it; reply CONFIRM to save\n\nType exit to leave.",
+        "additionalFields": {
+          "appendAttribution": false,
+          "replyMarkup": "replyKeyboard",
+          "replyKeyboard": {
+            "rows": [
+              {
+                "row": {
+                  "buttons": [
+                    {
+                      "text": "exit",
+                      "additionalFields": {}
+                    },
+                    {
+                      "text": "menu",
+                      "additionalFields": {}
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "replyKeyboardOptions": {
+            "resize_keyboard": true,
+            "one_time_keyboard": false
+          }
+        }
       },
       "id": "rules-welcome",
       "name": "Rules Welcome",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
       "position": [
         1160,
         900
@@ -614,7 +642,8 @@
           "id": "q14sD9Geek2ExOku",
           "name": "Telegram account"
         }
-      }
+      },
+      "webhookId": "rules-welcome"
     },
     {
       "parameters": {
@@ -1469,7 +1498,8 @@
   },
   "staticData": {
     "global": {
-      "mode": ""
+      "mode": "rules",
+      "chatHistory": []
     }
   }
 }
