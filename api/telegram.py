@@ -10,7 +10,7 @@ from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 DEFAULT_DATABASE_WEBHOOK_URL = (
-    "https://ammartd20.app.n8n.cloud/webhook-test/Database-check"
+    "https://ammartd20.app.n8n.cloud/webhook/Database-check"
 )
 ALLOWED_EXTENSIONS = {".xls", ".xlsx"}
 ALLOWED_MIME_TYPES = {
