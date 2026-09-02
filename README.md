@@ -1,141 +1,64 @@
-# CRM-AI — Telegram Database Check Platform
+# CRM-AI — Cheap + Smart Database Check
 
-Telegram üzerinden Excel/CSV yükleyip database check yapan sistem.
+Telegram Excel validation with **CSV-first**, **zero-token rules**, and **Obsidian-like vault memory**.
 
-## Mimari
+## Core idea
 
-```text
-Telegram (n8n Trigger)
-  -> CrewAI Service (/validate)
-      -> xlsx otomatik csv'ye çevrilir
-      -> Validator + Reporter ajanları
-  -> Memory Service (/memory/validation)
-      -> MCP uyumlu kalıcı hafıza (JSONL graph)
-  -> Telegram cevabı (metin + csv dosyası)
-```
+1. User uploads `.xlsx`
+2. System converts to **CSV** (cheaper / cleaner)
+3. **Rule engine** fixes most errors with **0 tokens**
+4. Only hard rows go to AI (V2 Verifier)
+5. Results + learned patterns stored as markdown vault notes (Obsidian style)
 
-## Neden xlsx yerine işlemde CSV?
+GodMode3 multi-model racing is intentionally **not** used (too expensive).
 
-Evet — **xlsx yükleyip içeride CSV'ye çevirmek daha uygun**:
+Read: `docs/ARCHITECTURE-CHEAP-SMART.md`
 
-| | xlsx | csv (işlem formatı) |
-|---|------|---------------------|
-| n8n node uyumu | Orta | Yüksek |
-| CrewAI / pandas analizi | Daha zor | Kolay |
-| Token/maliyet | Daha yüksek | Daha düşük |
-| Hata ayıklama | Zor | Kolay |
-
-Kullanıcı yine `.xlsx` gönderir; servis otomatik `.csv`'ye çevirip öyle işler.
-
----
-
-## 1) Servisleri çalıştır
+## Quick start
 
 ```bash
 cp .env.example .env
 docker compose up --build -d
 ```
 
-Health check:
+Services:
 
-- CrewAI: `http://localhost:8080/health`
-- Memory: `http://localhost:8090/health`
+- Rule engine (0 token): `http://localhost:8070/health`
+- CrewAI fallback: `http://localhost:8080/health`
+- Memory API: `http://localhost:8090/health`
 
-## 2) n8n workflow import
-
-Import files:
-
-- `n8n/telegram-database-check.workflow.json` (ana Telegram akışı)
-- `n8n/mcp-database-check-tool.workflow.json` (MCP tool expose)
-
-Gerekli n8n env:
-
-- `CREWAI_SERVICE_URL`
-- `MEMORY_SERVICE_URL`
-
-Telegram credential: `@BotFather` token.
-
-## 3) MCP hafıza
-
-REST API (n8n HTTP node):
-
-- `POST /memory/validation`
-- `GET /memory/user/{user_id}/history`
-- `GET /memory/graph`
-
-Claude/Cursor MCP config örneği:
-
-- `mcp/claude-desktop.config.example.json`
-
-Resmi MCP memory server da kullanılabilir:
+Validate:
 
 ```bash
-npx -y @modelcontextprotocol/server-memory
+curl -X POST http://localhost:8070/rules/validate -F "file=@sample.xlsx"
 ```
 
-## 4) CrewAI microservice
+## Obsidian-like vault
 
-Endpoint:
+```text
+vault/
+  MEMORY.md
+  rules/
+  patterns/
+  runs/
+```
 
-- `POST /validate` (multipart file upload)
+## n8n
 
-Davranış:
+Keep your existing **Telegram Database Validator Bot V2**.
 
-1. `.xlsx` -> `.csv` dönüşümü
-2. Rule-based validation (duplicate, header, column mismatch)
-3. `OPENAI_API_KEY` varsa Validator + Reporter crew
-4. Key yoksa rule-based fallback (ücretsiz mod)
+Recommended order inside V2:
+1. Extract/convert to CSV
+2. Call `rule-engine /rules/validate`
+3. Send only `ai_needed_rows` to Appointment/Verifier AI
+4. Merge corrected CSV + AI fixes
+5. Convert final output to XLSX and send on Telegram
 
----
+Import helpers remain under `n8n-import/`.
 
-## API örnekleri
-
-### Validate file
+## Tests
 
 ```bash
-curl -X POST "http://localhost:8080/validate" \
-  -F "file=@sample.xlsx" \
-  -F "user_id=123" \
-  -F "chat_id=456"
+python3 -m pip install openpyxl pandas pydantic fastapi
+python3 services/tests/test_rule_engine.py
 ```
-
-### Save memory
-
-```bash
-curl -X POST "http://localhost:8090/memory/validation" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "user_id":"123",
-    "chat_id":"456",
-    "file_name":"sample.xlsx",
-    "valid":false,
-    "issues":["duplicate rows"],
-    "converted_to":"csv",
-    "message":"2 duplicate row found"
-  }'
-```
-
----
-
-## Vercel bot (legacy)
-
-`api/telegram.py` hâlâ mevcut (fallback). Ana önerilen yol artık **n8n-native** akış.
-
----
-
-## Test
-
-```bash
-python3 -m pip install openpyxl fastapi pydantic
-python3 services/tests/smoke_test.py
-```
-
----
-
-## Önerilen rollout
-
-1. Docker servisleri ayağa kaldır
-2. n8n Telegram workflow import + activate
-3. `/start` -> Database check -> `.xlsx` gönder
-4. Memory history kontrol: `/memory/user/{id}/history`
-5. İsteğe bağlı MCP tool workflow publish

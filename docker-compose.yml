@@ -1,4 +1,14 @@
 services:
+  rule-engine:
+    build:
+      context: .
+      dockerfile: services/rule-engine/Dockerfile
+    ports:
+      - "8070:8070"
+    volumes:
+      - ./vault:/app/vault
+    restart: unless-stopped
+
   crewai-service:
     build:
       context: .
