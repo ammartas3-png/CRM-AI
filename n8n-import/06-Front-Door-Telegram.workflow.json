@@ -27,7 +27,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const update = $input.first().json;\n\nif (update.callback_query) {\n  const cb = update.callback_query;\n  const data = String(cb.data || '');\n  // Status survey vote: v|<account>|<code>\n  if (data.startsWith('v|')) {\n    const parts = data.split('|');\n    const account = parts[1] || '';\n    const code = parts[2] || '';\n    const STATUS = {\n      ca: 'Call Again',\n      na: 'No Answer 1-5',\n      n5: 'No Answer 5 UP',\n      rc: 'Recall',\n      ni: 'No Interest',\n      np: 'No Potential',\n      wn: 'Wrong Number or Email',\n      dr: 'Denied Registration',\n      keep: 'Keep CRM'\n    };\n    const status = STATUS[code] || code;\n    const sd = $getWorkflowStaticData('global');\n    if (!Array.isArray(sd.humanVotes)) sd.humanVotes = [];\n    sd.humanVotes.push({\n      account, status, code,\n      chat_id: cb.message?.chat?.id,\n      user_id: String(cb.from?.id || ''),\n      at: new Date().toISOString()\n    });\n    // keep last 200\n    if (sd.humanVotes.length > 200) sd.humanVotes = sd.humanVotes.slice(-200);\n    return [{\n      json: {\n        route: 'vote',\n        callback_id: cb.id,\n        callback_data: data,\n        chat_id: cb.message?.chat?.id,\n        user_id: String(cb.from?.id || ''),\n        account,\n        status,\n        code,\n        vote_ack: `Saved: ${account} → ${status}`\n      }\n    }];\n  }\n  return [{\n    json: {\n      route: 'callback',\n      callback_id: cb.id,\n      callback_data: data,\n      chat_id: cb.message?.chat?.id,\n      user_id: String(cb.from?.id || '')\n    }\n  }];\n}\n\nconst message = update.message || {};\nconst chatId = message.chat?.id;\nconst text = message.text || '';\n\nif (typeof text === 'string' && text.startsWith('/start')) {\n  return [{ json: { route: 'start', chat_id: chatId } }];\n}\n\nif (message.document) {\n  return [{\n    json: {\n      route: 'document',\n      chat_id: chatId,\n      file_id: message.document.file_id,\n      file_name: message.document.file_name || 'upload.xlsx',\n      mime_type: message.document.mime_type || ''\n    }\n  }];\n}\n\nreturn [{ json: { route: 'other', chat_id: chatId } }];\n"
+        "jsCode": "const update = $input.first().json;\nconst sd = $getWorkflowStaticData('global');\n\nif (update.callback_query) {\n  const cb = update.callback_query;\n  const data = String(cb.data || '');\n  const chatId = cb.message?.chat?.id;\n\n  if (data.startsWith('v|')) {\n    const parts = data.split('|');\n    const account = parts[1] || '';\n    const code = parts[2] || '';\n    const STATUS = {\n      ca: 'Call Again', na: 'No Answer 1-5', n5: 'No Answer 5 UP', rc: 'Recall',\n      ni: 'No Interest', np: 'No Potential', wn: 'Wrong Number or Email',\n      dr: 'Denied Registration', keep: 'Keep CRM'\n    };\n    const status = STATUS[code] || code;\n    if (!Array.isArray(sd.humanVotes)) sd.humanVotes = [];\n    sd.humanVotes.push({ account, status, code, chat_id: chatId, at: new Date().toISOString() });\n    if (sd.humanVotes.length > 200) sd.humanVotes = sd.humanVotes.slice(-200);\n    return [{ json: {\n      route: 'vote', callback_id: cb.id, callback_data: data, chat_id: chatId,\n      account, status, code, vote_ack: `Saved: ${account} → ${status}`\n    }}];\n  }\n\n  if (data === 'rules_chat') {\n    sd.mode = 'rules';\n    sd.chatHistory = [];\n    return [{ json: { route: 'rules_enter', callback_id: cb.id, callback_data: data, chat_id: chatId } }];\n  }\n\n  if (data === 'rules_exit') {\n    sd.mode = '';\n    sd.chatHistory = [];\n    sd.pendingProposal = null;\n    return [{ json: { route: 'rules_exit', callback_id: cb.id, callback_data: data, chat_id: chatId } }];\n  }\n\n  if (data === 'database_check') sd.mode = '';\n  return [{ json: {\n    route: 'callback', callback_id: cb.id, callback_data: data, chat_id: chatId,\n    user_id: String(cb.from?.id || '')\n  }}];\n}\n\nconst message = update.message || {};\nconst chatId = message.chat?.id;\nconst text = String(message.text || '').trim();\n\nif (text.startsWith('/start')) {\n  sd.mode = '';\n  return [{ json: { route: 'start', chat_id: chatId } }];\n}\n\nif (message.document) {\n  return [{ json: {\n    route: 'document', chat_id: chatId,\n    file_id: message.document.file_id,\n    file_name: message.document.file_name || 'upload.xlsx',\n    mime_type: message.document.mime_type || ''\n  }}];\n}\n\nif (/^\\/(exit|done|menu)$/i.test(text) || /^exit$/i.test(text)) {\n  sd.mode = '';\n  sd.chatHistory = [];\n  sd.pendingProposal = null;\n  return [{ json: { route: 'rules_exit', chat_id: chatId, text } }];\n}\n\nif (sd.mode === 'rules' && text) {\n  return [{ json: { route: 'rules_msg', chat_id: chatId, text, is_confirm: /^confirm$/i.test(text) } }];\n}\n\nreturn [{ json: { route: 'other', chat_id: chatId, text } }];\n"
       },
       "id": "route",
       "name": "Route Update",
@@ -129,6 +129,72 @@
               },
               "renameOutput": true,
               "outputKey": "vote"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "rules_enter",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "rules_enter"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "rules_msg",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "rules_msg"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "rules_exit",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "rules_exit"
             }
           ]
         },
@@ -149,7 +215,7 @@
       "parameters": {
         "operation": "sendMessage",
         "chatId": "={{ $json.chat_id }}",
-        "text": "Welcome! Tap Database check, then upload CSV (preferred) or XLSX.",
+        "text": "Welcome! Choose:\n• Database check — upload CRM Excel/CSV\n• Rules brain — talk about rules (which rule applies, propose changes)",
         "additionalFields": {
           "appendAttribution": false,
           "replyMarkup": "inlineKeyboard",
@@ -162,6 +228,18 @@
                       "text": "Database check",
                       "additionalFields": {
                         "callback_data": "database_check"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "row": {
+                  "buttons": [
+                    {
+                      "text": "Rules brain",
+                      "additionalFields": {
+                        "callback_data": "rules_chat"
                       }
                     }
                   ]
@@ -376,7 +454,7 @@
       "parameters": {
         "operation": "sendMessage",
         "chatId": "={{ $json.chat_id }}",
-        "text": "Send /start then tap Database check and upload a CSV/XLSX file.",
+        "text": "Use /start and pick a button:\n• Database check — send a file\n• Rules brain — chat about CRM rules\nOr send an Excel/CSV anytime.",
         "additionalFields": {
           "appendAttribution": false
         }
@@ -493,6 +571,484 @@
         }
       },
       "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "resource": "callback",
+        "operation": "answerQuery",
+        "queryId": "={{ $json.callback_id }}",
+        "additionalFields": {
+          "text": "Rules brain opened"
+        }
+      },
+      "id": "ans-rules-enter",
+      "name": "Answer Rules Enter",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        940,
+        900
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "q14sD9Geek2ExOku",
+          "name": "Telegram account"
+        }
+      },
+      "webhookId": "3190b38b-bdcf-4bf7-87d5-9fd5625a1386"
+    },
+    {
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chat_id }}",
+        "text": "Rules brain is on. Talk like a teammate:\n• Paste a comment/lead → which rule applies\n• Ask why a status is Wrong\n• Propose a change → I draft it; reply CONFIRM to save\n• /exit to leave",
+        "additionalFields": {
+          "appendAttribution": false,
+          "replyMarkup": "inlineKeyboard",
+          "inlineKeyboard": {
+            "rows": [
+              {
+                "row": {
+                  "buttons": [
+                    {
+                      "text": "Exit rules brain",
+                      "additionalFields": {
+                        "callback_data": "rules_exit"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      },
+      "id": "rules-welcome",
+      "name": "Rules Welcome",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1160,
+        900
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "q14sD9Geek2ExOku",
+          "name": "Telegram account"
+        }
+      },
+      "webhookId": "9fd5c4d8-4652-493a-ab6c-9fccbce182aa"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "has-cb",
+              "leftValue": "={{ $json.callback_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "exit-has-cb",
+      "name": "Exit Has Callback",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        720,
+        1100
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "callback",
+        "operation": "answerQuery",
+        "queryId": "={{ $json.callback_id }}",
+        "additionalFields": {
+          "text": "Exited"
+        }
+      },
+      "id": "ans-rules-exit",
+      "name": "Answer Rules Exit",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        940,
+        1100
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "q14sD9Geek2ExOku",
+          "name": "Telegram account"
+        }
+      },
+      "webhookId": "4269f33a-e5b0-4770-bea5-4327fef12551"
+    },
+    {
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chat_id }}",
+        "text": "Left Rules brain. /start for the menu.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "rules-exit-msg",
+      "name": "Rules Exit Msg",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1160,
+        1100
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "q14sD9Geek2ExOku",
+          "name": "Telegram account"
+        }
+      },
+      "webhookId": "aa1c2c98-6997-4b01-a8a7-6781c0bd82b7"
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $input.first().json;\nconst sd = $getWorkflowStaticData('global');\nsd._rulesMsg = { chat_id: r.chat_id, text: r.text, is_confirm: !!r.is_confirm };\nreturn [{ json: { ...r, _seed: true } }];\n"
+      },
+      "id": "seed-rules-msg",
+      "name": "Seed Rules Msg",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        1300
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "17m6No_sKILzLs5ZjmND0FykwkjFBLvWhiJP6NCcKq8E",
+          "mode": "list",
+          "cachedResultName": "CRM_AI_Rules"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1"
+        },
+        "options": {}
+      },
+      "id": "get-rules-sheet",
+      "name": "Get Rules Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        940,
+        1300
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "onoiTia5zEmBSr7R",
+          "name": "Google Sheets account 2"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const sd = $getWorkflowStaticData('global');\nconst seed = sd._rulesMsg || $('Route Update').item.json;\nconst rows = $input.all().map(i => i.json).filter(j => j && !j._seed && (j.trigger_phrase || j.Trigger || j['account no'] === undefined));\nconst usable = $input.all().map(i => i.json).filter(j => j && (j.trigger_phrase || j.Trigger));\nif (!usable.length) {\n  return [{ json: { chat_id: seed.chat_id, text: seed.text, is_confirm: seed.is_confirm, trigger_phrase: '', _no_sheet: true } }];\n}\nreturn usable.map(j => ({ json: { ...j, chat_id: seed.chat_id, text: seed.text, is_confirm: seed.is_confirm } }));\n"
+      },
+      "id": "after-rules-sheet",
+      "name": "After Rules Sheet",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1050,
+        1300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const sd = $getWorkflowStaticData('global');\nconst route = sd._rulesMsg || $('Route Update').item.json;\nconst chatId = route.chat_id;\nconst userText = String(route.text || '').trim();\nconst isConfirm = !!route.is_confirm;\n\nconst sheetRows = $input.all().map(i => i.json).filter(j => j && (j.trigger_phrase || j.Trigger));\nconst active = sheetRows.filter(j => String(j.active ?? j.Active ?? 'true').toLowerCase() !== 'false');\nconst sample = active.slice(0, 60).map(j => {\n  const t = j.trigger_phrase || j.Trigger || '';\n  const s = j.suggested_status || j.Suggested || '';\n  const g = j.keyword_group || j.group || '';\n  const appr = j.human_approved || j.reviewed || '';\n  return `- [${g}] \"${t}\" → ${s}${appr ? ' (approved:'+appr+')' : ''}`;\n}).join('\\n');\n\nconst BRAIN = `You are the CRM Database-check Rules Brain for a Telegram bot.\nSpeak concise Turkish or English matching the user. Be practical, not verbose.\n\nCANONICAL ZERO-TOKEN RULES (source of truth):\n1) currently busy (no real talk) → No Answer 1-5 (NOT Call Again)\n2) invalid mail + phone NA → keep No Answer (mail does not change status)\n3) first-day wrong number → Denied Registration; 2+ days → Wrong Number or Email\n4) Call Again/Recall → wipe to No Answer only after 5 DISTINCT NA days; fewer → keep Call Again/Recall\n5) no money + concrete callback (tmrw/day/date) → Call Again\n6) CRM Potential → Manual Check only\n7) CRM Decline/Duplicate/DNC → Manual Check, never auto-change\n8) Recall + newer concrete callback → Call Again\n9) No Potential subtypes (e.g. no documents) stay Correct unless a callback override wins\n\nGOOGLE SHEET TRIGGERS (sample, may be noisy; ignore unapproved AI rows):\n${sample || '(sheet empty or unavailable)'}\n\nHOW TO ANSWER:\n- If user pastes comments: say which rule fires, expected status, and why.\n- If user wants a change: draft a short proposal with: id, when, when-not, example comment, expected status.\n  End with exactly: \"Reply CONFIRM to save this draft.\"\n- If unclear, ask one short clarifying question.\n- Never invent n8n URLs. Never claim CRM was updated.`;\n\nif (isConfirm) {\n  const prop = sd.pendingProposal;\n  if (!prop) {\n    return [{ json: {\n      chat_id: chatId, branch: 'reply',\n      reply_text: 'No pending draft. Ask me to propose a rule change first, then reply CONFIRM.'\n    }}];\n  }\n  return [{ json: {\n    chat_id: chatId, branch: 'confirm',\n    account_no: prop.id || 'rule_draft', old_status: '',\n    new_status: prop.expected_status || '', validation_result: 'Rule Draft',\n    decision_source: 'rules_brain', matched_keyword: prop.id || '',\n    confidence: 'Human', reason: String(prop.summary || '').slice(0, 500),\n    example_comment: String(prop.example || '').slice(0, 280), type: 'rule_draft',\n    reply_text: `Draft saved to Decision_Memory.\\nNext: implement in vault/golden/Memory Match (or tell Cursor).\\n\\n${String(prop.summary || '').slice(0, 1200)}`\n  }}];\n}\n\nif (!Array.isArray(sd.chatHistory)) sd.chatHistory = [];\nsd.chatHistory.push({ role: 'user', content: userText });\nif (sd.chatHistory.length > 12) sd.chatHistory = sd.chatHistory.slice(-12);\nconst hist = sd.chatHistory.map(h => `${h.role}: ${h.content}`).join('\\n');\n\nreturn [{ json: {\n  chat_id: chatId, branch: 'ai', system_prompt: BRAIN,\n  user_message: `Chat so far:\\n${hist}\\n\\nLatest user message:\\n${userText}`,\n  raw_user: userText\n}}];\n"
+      },
+      "id": "prepare-brain",
+      "name": "Prepare Brain",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1160,
+        1300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "is-confirm",
+              "leftValue": "={{ $json.branch }}",
+              "rightValue": "confirm",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "brain-branch",
+      "name": "Brain Branch",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1380,
+        1300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const sd = $getWorkflowStaticData('global');\nconst j = $input.first().json;\nsd.pendingProposal = null;\nreturn [{ json: j }];\n"
+      },
+      "id": "clear-proposal",
+      "name": "Clear Proposal",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1490,
+        1180
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "17m6No_sKILzLs5ZjmND0FykwkjFBLvWhiJP6NCcKq8E",
+          "mode": "list",
+          "cachedResultName": "CRM_AI_Rules"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Decision_Memory",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "type": "={{ $json.type || \"rule_draft\" }}",
+            "account_no": "={{ $json.account_no }}",
+            "old_status": "={{ $json.old_status }}",
+            "new_status": "={{ $json.new_status }}",
+            "validation_result": "={{ $json.validation_result }}",
+            "decision_source": "={{ $json.decision_source }}",
+            "matched_keyword": "={{ $json.matched_keyword }}",
+            "confidence": "={{ $json.confidence }}",
+            "reason": "={{ $json.reason }}",
+            "example_comment": "={{ $json.example_comment }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "append-rule-draft",
+      "name": "Append Rule Draft",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1600,
+        1180
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "onoiTia5zEmBSr7R",
+          "name": "Google Sheets account 2"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.reply_text }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "send-confirm-reply",
+      "name": "Send Confirm Reply",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1820,
+        1180
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "q14sD9Geek2ExOku",
+          "name": "Telegram account"
+        }
+      },
+      "webhookId": "173b0ef1-c957-49ac-b3a5-ac09afe4ebea"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "is-ai",
+              "leftValue": "={{ $json.branch }}",
+              "rightValue": "ai",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ai-or-reply",
+      "name": "AI Or Quick Reply",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1490,
+        1420
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-5.4-mini', temperature: 0.2, messages: [{ role: 'system', content: $json.system_prompt }, { role: 'user', content: $json.user_message }] }) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "brain-openai",
+      "name": "Brain OpenAI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1600,
+        1420
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "jxy59ikFPZJ2RYDf",
+          "name": "OpenAI account"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const sd = $getWorkflowStaticData('global');\nconst prep = $('Prepare Brain').item.json;\nconst raw = $input.first().json;\nlet text = '';\ntry {\n  text = raw.choices?.[0]?.message?.content || raw.message?.content || raw.error?.message || JSON.stringify(raw).slice(0, 500);\n} catch (e) { text = 'Brain error: could not parse model response.'; }\ntext = String(text || '').trim() || '(empty reply)';\nif (/reply confirm to save/i.test(text)) {\n  sd.pendingProposal = {\n    id: 'draft_' + Date.now(),\n    summary: text.slice(0, 900),\n    expected_status: (text.match(/Expected status:\\s*(.+)/i) || [,''])[1].trim().slice(0, 80),\n    example: (text.match(/Example[^\\n]*:\\s*(.+)/i) || [,''])[1].trim().slice(0, 200)\n  };\n}\nif (!Array.isArray(sd.chatHistory)) sd.chatHistory = [];\nsd.chatHistory.push({ role: 'assistant', content: text.slice(0, 1000) });\nif (sd.chatHistory.length > 12) sd.chatHistory = sd.chatHistory.slice(-12);\nif (text.length > 3500) text = text.slice(0, 3500) + '\\n…';\nreturn [{ json: { chat_id: prep.chat_id, reply_text: text } }];\n"
+      },
+      "id": "parse-brain",
+      "name": "Parse Brain Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1820,
+        1420
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.reply_text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "replyMarkup": "inlineKeyboard",
+          "inlineKeyboard": {
+            "rows": [
+              {
+                "row": {
+                  "buttons": [
+                    {
+                      "text": "Exit rules brain",
+                      "additionalFields": {
+                        "callback_data": "rules_exit"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      },
+      "id": "send-brain-reply",
+      "name": "Send Brain Reply",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2040,
+        1420
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "q14sD9Geek2ExOku",
+          "name": "Telegram account"
+        }
+      },
+      "webhookId": "fce3bdde-6bb2-49df-a618-162b86cead64"
+    },
+    {
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.reply_text }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "send-quick-brain",
+      "name": "Send Quick Brain Reply",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1820,
+        1550
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "q14sD9Geek2ExOku",
+          "name": "Telegram account"
+        }
+      },
+      "webhookId": "b8db263d-c2b2-49a6-bc2b-4feb0ef2ef61"
     }
   ],
   "connections": {
@@ -544,6 +1100,27 @@
         [
           {
             "node": "Answer Vote",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Answer Rules Enter",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Seed Rules Msg",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Exit Has Callback",
             "type": "main",
             "index": 0
           }
@@ -639,6 +1216,170 @@
         [
           {
             "node": "Append Human Vote",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Answer Rules Enter": {
+      "main": [
+        [
+          {
+            "node": "Rules Welcome",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exit Has Callback": {
+      "main": [
+        [
+          {
+            "node": "Answer Rules Exit",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rules Exit Msg",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Answer Rules Exit": {
+      "main": [
+        [
+          {
+            "node": "Rules Exit Msg",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Seed Rules Msg": {
+      "main": [
+        [
+          {
+            "node": "Get Rules Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Rules Sheet": {
+      "main": [
+        [
+          {
+            "node": "After Rules Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "After Rules Sheet": {
+      "main": [
+        [
+          {
+            "node": "Prepare Brain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Brain": {
+      "main": [
+        [
+          {
+            "node": "Brain Branch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Brain Branch": {
+      "main": [
+        [
+          {
+            "node": "Clear Proposal",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Or Quick Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clear Proposal": {
+      "main": [
+        [
+          {
+            "node": "Append Rule Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append Rule Draft": {
+      "main": [
+        [
+          {
+            "node": "Send Confirm Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Or Quick Reply": {
+      "main": [
+        [
+          {
+            "node": "Brain OpenAI",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Quick Brain Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Brain OpenAI": {
+      "main": [
+        [
+          {
+            "node": "Parse Brain Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Brain Reply": {
+      "main": [
+        [
+          {
+            "node": "Send Brain Reply",
             "type": "main",
             "index": 0
           }
