@@ -51,5 +51,8 @@ Applied after reviewing execution #1114 input vs output:
 3. **Merge continuation comment lines** — multiline bodies keep timestamp so `cb tmrw` stays with the talk
 4. **busy_after_pickup** — `pu ... busy/lm` is Call Again, not `no_real_conversation`
 5. **Call Again → No Answer only after 5 distinct NA days** — 1–4 days of `rej`/`navm` do NOT wipe Call Again (`call_again_kept_under_5na` / `call_again_5na_days`)
-6. **Appointment timestamp false positives** — reject metadata dates as `When To Call`
-7. **AI prompts** — money+concrete callback → Call Again; Appointment AI anti-false-positive rules
+6. **Sheet guards** — Google Sheet rules no longer override policies: skip `no_answer` rows while CRM Call Again protected (<5 NA days); skip `busy` on pickup lines; skip row 130 when agent pasted `Call Again` status
+7. **Appointment timestamp false positives** — reject metadata dates as `When To Call`
+8. **AI prompts** — money+concrete callback → Call Again; Appointment AI anti-false-positive rules
+
+Sheet'i elle düzenlemeniz gerekmez; motor çakışan satırları kodda yok sayar. İsteğe bağlı: row 397/405/407/130 yukarıdaki gibi korunur.
