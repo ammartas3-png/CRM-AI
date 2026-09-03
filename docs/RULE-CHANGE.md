@@ -49,6 +49,16 @@ Doğrulama:
 ```bash
 python3 scripts/validate_rule_system.py
 python3 -m pytest -q services/tests/test_golden_classify.py
+node scripts/mm_harness.js     # n8n Memory Match, insan onaylı 59 lead
+node scripts/appt_harness.js   # randevu düğümü koruma kuralları
+```
+
+n8n düğüm kodunu dosya olarak düzenlemek için:
+
+```bash
+python3 scripts/node_code.py extract "Memory Match" /tmp/mm.js
+# /tmp/mm.js üzerinde düzenle
+python3 scripts/node_code.py inject "Memory Match" /tmp/mm.js
 ```
 
 ## Dosya haritası
@@ -57,7 +67,12 @@ python3 -m pytest -q services/tests/test_golden_classify.py
 |-------|-----|
 | `vault/rules/*.md` | İnsan okur kural |
 | `vault/MEMORY.md` | Kural indeksi |
-| `evals/golden_leads.jsonl` | Regresyon kilidi |
+| `evals/golden_leads.jsonl` | Regresyon kilidi (Python motoru) |
+| `evals/wrong_review_cases.jsonl` | İnsan onaylı 59 lead (n8n Memory Match) |
+| `evals/appointment_cases.jsonl` | Randevu düğümü koruma kuralları |
+| `evals/rules_sheet.json` | Canlı Google Sheet kural satırlarının kopyası |
+| `scripts/mm_harness.js` | Memory Match'i n8n dışında koşturur |
+| `scripts/node_code.py` | Düğüm kodunu çıkar / geri yaz |
 | `services/rule-engine/crm_classify.py` | Canonical kod |
 | n8n **Memory Match** | Canlı Telegram motoru |
 | Google Sheet | Sadece `human_approved=true` tetikleyiciler |
