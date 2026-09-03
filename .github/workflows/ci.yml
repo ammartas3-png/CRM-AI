@@ -30,3 +30,10 @@ jobs:
           python services/tests/test_lead_gate.py
       - name: Pytest
         run: python -m pytest -q services/tests
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: n8n Memory Match regression
+        run: node scripts/mm_harness.js
+      - name: n8n appointment guards
+        run: node scripts/appt_harness.js
