@@ -70,7 +70,25 @@ def status_canon(s: str) -> str:
     return x
 
 
+# Agents paste the CRM status itself as a comment ("No potential;", "Recall;"). That is a label,
+# not customer evidence. "na" / "no answer" stay out: those are genuine dialer outcomes.
+BARE_STATUS_RE = re.compile(
+    r"^(no potential( - no documents| no documents)?|call again|recall|no interest|not interested|"
+    r"no language|denied registration|wrong number( or email)?|invalid country|under 18|"
+    r"decline|declined|duplicate|dnc|potential)$",
+    re.I,
+)
+
+
+def is_bare_status_line(text: str) -> bool:
+    t = re.sub(r"[^a-z0-9 \-]", " ", str(text or "").strip().lower())
+    t = re.sub(r"\s+", " ", t).strip()
+    return bool(t) and bool(BARE_STATUS_RE.match(t))
+
+
 def is_system_comment(text: str) -> bool:
+    if is_bare_status_line(text):
+        return True
     return bool(re.match(r"^(email |email\b|missed call email|in progress|new$|duplicate)", str(text or "").strip(), re.I))
 
 
@@ -156,15 +174,55 @@ CONCRETE_TIME_RE = re.compile(
 )
 
 
+# The agent narrating their own dialing ("cb : vm", "cb na x2", "CALLED BACK PUHU",
+# "I said I would hang up and call back", "when i tried to cb she rejected"). None of this is
+# the customer asking to be called back.
+AGENT_DIAL_RE = re.compile(
+    r"\b((cb|cbk|clbk|cback|callback|call again|called back)\s*[:\-]?\s*"
+    r"(vm|voice\s*mail|voicemail|na|ndt|db|no answer|rej|rejected|busy|pu ?hu|hu|hung)(\s*[x*]\s*\d+)?|"
+    r"cb\s*(na|ndt|db)(\s*[x*]\s*\d+)?|"
+    r"i (said|told)[^.;]{0,40}?(i (would|will) )?(hang up|hung up)( and (i )?(would |will )?call(ed)? (back|again))?|"
+    r"i (would|will) (hang up|call back|call again)|"
+    r"i (tried|trying|attempted) to (cb|cbk|call back|callback|call again)|"
+    r"when i (cb|called back|tried to cb)|i called (her|him|them )?back|after i cb)\b",
+    re.I,
+)
+
+
+def strip_agent_dial(text: str) -> str:
+    return re.sub(r"\s+", " ", AGENT_DIAL_RE.sub(" ", str(text or ""))).strip()
+
+
 def has_callback(text: str) -> bool:
-    """True when text has a real callback signal (not 'didn't give me time to talk')."""
-    t = fold(text)
+    """True when text has a real CUSTOMER callback signal.
+
+    Agent dial notes and mockery ("didn't give me time to talk") do not count.
+    """
+    t = strip_agent_dial(fold(text))
     if not t or not CALLBACK_RE.search(t):
         return False
     if CALLBACK_FALSE_RE.search(t) and not CONCRETE_TIME_RE.search(t):
         return False
     return True
 MONEY_RE = re.compile(r"\b(no money|dont have money|do not have money|no funds|cannot afford|cant afford|no income)\b", re.I)
+# A money block that comes with a concrete near-term plan to get the money is still workable.
+FUNDING_PLAN_RE = re.compile(
+    r"\b(get (my |his |her )?salary|until (the )?salary|after (the )?salary|salary (time|day|date|comes)|"
+    r"salary in (a )?few days|when (i|he|she) gets? (paid|the salary|money)|"
+    r"(will|gonna|going to) (try to )?(get|arrange|bring|find|sources?|borrow|raise)|"
+    r"arrange (the |some )?(funds?|money|amount)|will bring|get help from|will get help|"
+    r"ask (my|his|her) (friend|friends|family|wife|husband|brother|sister|son|daughter)|borrow|"
+    r"sources? (for )?(the )?funds?|then continue|will get the funds?|will get money|is interested)\b",
+    re.I,
+)
+# The same money block with no route back stays No Potential.
+FUNDING_DEAD_RE = re.compile(
+    r"\b(not sure when|dont know when|do not know when|no idea when|not (very )?serious|"
+    r"didnt mean to invest|no job|jobless|unemployed|months? to save|save up|saving up|"
+    r"in \d+ ?months?|after \d+ ?months?|"
+    r"by (january|february|march|april|may|june|july|august|september|october|november|december))\b",
+    re.I,
+)
 WRONG_NUM_RE = re.compile(
     r"\b(wrong number|wrong no\b|wrong num\b|not my number|not the (right )?(person|number)|"
     r"number (is )?incorrect|number not in service|invalid number)\b",
@@ -285,14 +343,39 @@ def classify_lead(lead: dict[str, Any]) -> ClassifyResult:
         if has_callback(newest_norm) or has_callback(full):
             return done("Call Again", "rule-engine:money_plus_callback", "no money + concrete callback => Call Again (callback wins)")
 
+    # 5b) no money but a concrete funding plan (salary, arrange funds, ask friends) and no
+    # dead-end signal → the lead is only blocked on timing, keep dialing.
+    if MONEY_RE.search(full) and FUNDING_PLAN_RE.search(full) and not FUNDING_DEAD_RE.search(full):
+        return done(
+            "Call Again",
+            "rule-engine:money_with_funding_plan",
+            "no money now but a concrete plan to get it => Call Again",
+            detail="funding plan",
+        )
+
+    # 5c) money block with neither a callback nor a funding plan → No Potential.
+    if MONEY_RE.search(full) and not has_callback(full) and not FUNDING_PLAN_RE.search(full):
+        return done(
+            "No Potential",
+            "rule-engine:no_money",
+            "money block with no callback and no funding plan => No Potential",
+            detail="no money",
+        )
+
     # 8) Recall + newer callback → Call Again
     if crm_c == "recall" and has_callback(newest_norm):
         return done("Call Again", "rule-engine:recall_to_call_again", "Recall CRM but newest comment has concrete callback => Call Again")
 
     # Mockery / "didn't give me time to talk" — not a callback request
     if newest and CALLBACK_FALSE_RE.search(newest_norm) and not has_callback(newest_norm):
+        # No Interest needs two refusal-level days; a single non-cooperative call is a Recall.
+        noncoop_days = {
+            p["date"]
+            for p in non_sys
+            if p["date"] and CALLBACK_FALSE_RE.search(p["norm"])
+        }
         return done(
-            "No Interest",
+            "No Interest" if len(noncoop_days) >= 2 else "Recall",
             "rule-engine:noncoop_in_newest",
             "Newest comment is non-cooperative / no time to talk (not a customer callback request).",
             detail="noncoop / didnt give time",

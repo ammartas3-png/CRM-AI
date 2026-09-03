@@ -15,6 +15,11 @@ Operating manual: [`docs/RULE-CHANGE.md`](../docs/RULE-CHANGE.md)
 - [`decline-manual-check`](rules/decline-manual-check.md)
 - [`recall-to-call-again`](rules/recall-to-call-again.md)
 - [`keep-no-potential`](rules/keep-no-potential.md)
+- [`agent-dial-notes`](rules/agent-dial-notes.md)
+- [`money-with-funding-plan`](rules/money-with-funding-plan.md)
+- [`bare-status-comment`](rules/bare-status-comment.md)
+- [`no-interest-needs-two-days`](rules/no-interest-needs-two-days.md)
+- [`keep-decided-crm-status`](rules/keep-decided-crm-status.md)
 
 ## Schema / normalize helpers
 
