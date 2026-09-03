@@ -2204,7 +2204,7 @@
       "parameters": {
         "operation": "sendMessage",
         "chatId": "={{ $json.chat_id }}",
-        "text": "={{ \"✅ \" + $json.vote_ack + \"\\n(Human survey — saved for this chat session)\" }}",
+        "text": "={{ \"✅ \" + $json.vote_ack + \"\\nNext question (or Manual Entry file) is coming…\" }}",
         "additionalFields": {
           "appendAttribution": false
         }
@@ -2271,6 +2271,44 @@
         }
       },
       "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const j = $input.first().json;\nreturn [{\n  json: {\n    ...j,\n    _action: 'survey_vote',\n    account: String(j.account || ''),\n    status: String(j.status || ''),\n    code: String(j.code || ''),\n    chat_id: String(j.chat_id || ''),\n    chatId: String(j.chat_id || '')\n  }\n}];\n"
+      },
+      "id": "b42b83bb-c3db-4820-95a5-43f7ed99c7a3",
+      "name": "Prep Survey Vote To V2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://ammartd20.app.n8n.cloud/webhook/Database-check",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ _action: 'survey_vote', account: $json.account, status: $json.status, code: $json.code, chat_id: String($json.chat_id || ''), chatId: String($json.chat_id || '') }) }}",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "52f8d8a3-1895-487d-87b7-52fc933d1626",
+      "name": "Forward Survey Vote To V2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1820,
+        700
+      ]
     }
   ],
   "connections": {
@@ -2852,6 +2890,28 @@
         [
           {
             "node": "Append Human Vote",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append Human Vote": {
+      "main": [
+        [
+          {
+            "node": "Prep Survey Vote To V2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep Survey Vote To V2": {
+      "main": [
+        [
+          {
+            "node": "Forward Survey Vote To V2",
             "type": "main",
             "index": 0
           }

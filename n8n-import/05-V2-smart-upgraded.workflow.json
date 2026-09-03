@@ -565,7 +565,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// CRM MANUAL ENTRY file — webhook'a yuklediginiz formatin aynisi.\n// Only leads whose status should change (Suggested != CRM).\n// customer status column = new status to write (Suggested Status).\n// The system never writes to CRM; you review and enter manually.\n\nfunction buildMatchDetail(j) {\n  const row = j[\"Matched Sheet Row\"];\n  const trigger = String(j[\"matched_trigger\"] || \"\").trim();\n  const keyword = String(j[\"Matched Keyword\"] || \"\").trim();\n  const src = String(j[\"Decision Source\"] || \"\").trim();\n  const hasRow = row !== undefined && row !== null && row !== \"\" && row !== \"-\";\n  if (hasRow) {\n    let s = `Row ${row}`;\n    if (trigger) s += `: ${trigger}`;\n    if (keyword && keyword !== trigger) s += ` (${keyword})`;\n    return s;\n  }\n  const parts = [];\n  if (src) parts.push(src);\n  if (trigger) parts.push(`trigger: ${trigger}`);\n  if (keyword) parts.push(keyword);\n  return parts.join(\" | \") || \"\";\n}\n\nconst norm = s => String(s || \"\").trim().toLowerCase().replace(/\\s+/g, \" \");\nfunction statusCanon(s) {\n  const x = norm(s);\n  if (!x) return \"\";\n  if (/no answer/.test(x) && /5/.test(x)) return \"no answer 5 up\";\n  if (/no answer/.test(x)) return \"no answer 1-5\";\n  if (/no potential/.test(x)) return \"no potential\";\n  if (/wrong (number|email)/.test(x)) return \"wrong number or email\";\n  if (/denied reg/.test(x)) return \"denied registration\";\n  if (/no interest/.test(x)) return \"no interest\";\n  if (/call again/.test(x)) return \"call again\";\n  if (/recall/.test(x)) return \"recall\";\n  return x;\n}\n\nconst rows = $input.all().map(i => i.json);\nconst out = rows\n  .filter(j => {\n    const crm = norm(j[\"customer status\"]);\n    const sug = norm(j[\"Suggested Status\"]);\n    if (!sug) return false;\n    // Skip equivalent statuses (No Potential - no documents ≡ No Potential)\n    if (statusCanon(crm) && statusCanon(crm) === statusCanon(sug)) return false;\n    return crm !== sug;\n  })\n  .map(j => ({\n    json: {\n      brand: j.brand || \"\",\n      \"account no\": j[\"account no\"] || \"\",\n      \"last 10 comments\": String(j[\"last 10 comments\"] || \"\").slice(0, 450),\n      \"customer status\": j[\"Suggested Status\"] || \"\",\n      country: j.country || \"\",\n      Agent: j.Agent || \"\",\n      \"Current Agent Office\": j[\"Current Agent Office\"] || \"\",\n      \"Old Status (CRM)\": j[\"customer status\"] || \"\",\n      Reason: j.Reason || \"\",\n      \"Decision Source\": j[\"Decision Source\"] || \"\",\n      \"Match Detail\": buildMatchDetail(j),\n      // Closed-loop review fields (fill after CRM update)\n      \"Applied to CRM\": \"\",\n      \"Applied At\": \"\",\n      \"Applied By\": \"\",\n      \"Review Notes\": \"\"\n    }\n  }));\n\nout.sort((a, b) => String(a.json[\"account no\"]).localeCompare(String(b.json[\"account no\"])));\n\nif (out.length === 0) {\n  out.push({\n    json: {\n      brand: \"\",\n      \"account no\": \"\",\n      \"last 10 comments\": \"\",\n      \"customer status\": \"\",\n      country: \"\",\n      Agent: \"\",\n      \"Current Agent Office\": \"\",\n      \"Old Status (CRM)\": \"\",\n      Reason: \"No CRM status change suggested in this run (all Correct).\",\n      \"Decision Source\": \"\",\n      \"Match Detail\": \"\",\n      \"Applied to CRM\": \"\",\n      \"Applied At\": \"\",\n      \"Applied By\": \"\",\n      \"Review Notes\": \"\"\n    }\n  });\n}\nreturn out;\n"
+        "jsCode": "// CRM MANUAL ENTRY file — webhook'a yuklediginiz formatin aynisi.\n// Only leads whose status should change (Suggested != CRM).\n// customer status column = new status to write (Suggested Status).\n// The system never writes to CRM; you review and enter manually.\n\nfunction buildMatchDetail(j) {\n  const row = j[\"Matched Sheet Row\"];\n  const trigger = String(j[\"matched_trigger\"] || \"\").trim();\n  const keyword = String(j[\"Matched Keyword\"] || \"\").trim();\n  const src = String(j[\"Decision Source\"] || \"\").trim();\n  const hasRow = row !== undefined && row !== null && row !== \"\" && row !== \"-\";\n  if (hasRow) {\n    let s = `Row ${row}`;\n    if (trigger) s += `: ${trigger}`;\n    if (keyword && keyword !== trigger) s += ` (${keyword})`;\n    return s;\n  }\n  const parts = [];\n  if (src) parts.push(src);\n  if (trigger) parts.push(`trigger: ${trigger}`);\n  if (keyword) parts.push(keyword);\n  return parts.join(\" | \") || \"\";\n}\n\nconst norm = s => String(s || \"\").trim().toLowerCase().replace(/\\s+/g, \" \");\nfunction statusCanon(s) {\n  const x = norm(s);\n  if (!x) return \"\";\n  if (/no answer/.test(x) && /5/.test(x)) return \"no answer 5 up\";\n  if (/no answer/.test(x)) return \"no answer 1-5\";\n  if (/no potential/.test(x)) return \"no potential\";\n  if (/wrong (number|email)/.test(x)) return \"wrong number or email\";\n  if (/denied reg/.test(x)) return \"denied registration\";\n  if (/no interest/.test(x)) return \"no interest\";\n  if (/call again/.test(x)) return \"call again\";\n  if (/recall/.test(x)) return \"recall\";\n  return x;\n}\n\nconst rows = $input.all().map(i => i.json);\nconst out = rows\n  .filter(j => {\n    // Bot Q&A leads are collected after Telegram answers (separate Manual Entry file)\n    if (j._needs_bot_qa === true || j._needs_bot_qa === \"true\") return false;\n    if (/Bot Q&A pending/i.test(String(j[\"Decision Source\"] || \"\"))) return false;\n    const crm = norm(j[\"customer status\"]);\n    const sug = norm(j[\"Suggested Status\"]);\n    if (!sug) return false;\n    // Skip equivalent statuses (No Potential - no documents ≡ No Potential)\n    if (statusCanon(crm) && statusCanon(crm) === statusCanon(sug)) return false;\n    return crm !== sug;\n  })\n  .map(j => ({\n    json: {\n      brand: j.brand || \"\",\n      \"account no\": j[\"account no\"] || \"\",\n      \"last 10 comments\": String(j[\"last 10 comments\"] || \"\").slice(0, 450),\n      \"customer status\": j[\"Suggested Status\"] || \"\",\n      country: j.country || \"\",\n      Agent: j.Agent || \"\",\n      \"Current Agent Office\": j[\"Current Agent Office\"] || \"\",\n      \"Old Status (CRM)\": j[\"customer status\"] || \"\",\n      Reason: j.Reason || \"\",\n      \"Decision Source\": j[\"Decision Source\"] || \"\",\n      \"Match Detail\": buildMatchDetail(j),\n      // Closed-loop review fields (fill after CRM update)\n      \"Applied to CRM\": \"\",\n      \"Applied At\": \"\",\n      \"Applied By\": \"\",\n      \"Review Notes\": \"\"\n    }\n  }));\n\nout.sort((a, b) => String(a.json[\"account no\"]).localeCompare(String(b.json[\"account no\"])));\n\nif (out.length === 0) {\n  out.push({\n    json: {\n      brand: \"\",\n      \"account no\": \"\",\n      \"last 10 comments\": \"\",\n      \"customer status\": \"\",\n      country: \"\",\n      Agent: \"\",\n      \"Current Agent Office\": \"\",\n      \"Old Status (CRM)\": \"\",\n      Reason: \"No CRM status change suggested in this run (all Correct).\",\n      \"Decision Source\": \"\",\n      \"Match Detail\": \"\",\n      \"Applied to CRM\": \"\",\n      \"Applied At\": \"\",\n      \"Applied By\": \"\",\n      \"Review Notes\": \"\"\n    }\n  });\n}\nreturn out;\n"
       },
       "id": "db8d702f-053c-4604-9488-b61e57aef85d",
       "name": "Build Manual Entry",
@@ -733,7 +733,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Route webhook input:\n// - binary file upload (csv/xlsx/json) -> extract path\n// - JSON body -> Chunk Router directly\n// Captures Telegram chat_id from Front Door multipart form / JSON body into workflow staticData.\nconst item = $input.first();\n\nfunction detectKind(fileName, mime) {\n  const name = String(fileName || '').toLowerCase();\n  const m = String(mime || '').toLowerCase();\n  if (name.endsWith('.csv') || m.includes('csv') || m.includes('text/plain')) return 'csv';\n  if (name.endsWith('.xlsx') || m.includes('spreadsheetml')) return 'xlsx';\n  if (name.endsWith('.xls') || m.includes('ms-excel')) return 'xls';\n  if (name.endsWith('.json') || m.includes('json')) return 'json';\n  return 'unknown';\n}\n\nfunction pickChatId(it) {\n  const j = it.json || {};\n  const body = (j.body && typeof j.body === 'object') ? j.body : {};\n  const q = j.query || {};\n  const cand = j.chat_id || j.chatId || body.chat_id || body.chatId ||\n    q.chat_id || q.chatId || j._telegram_chat_id || body._telegram_chat_id || '';\n  return String(cand || '').trim();\n}\n\nconst chatId = pickChatId(item);\nconst sd = $getWorkflowStaticData('global');\nif (chatId) sd.telegramChatId = chatId;\n// Keep last known chat for chunk continuations if form omitted chat_id\nconst effectiveChat = chatId || String(sd.telegramChatId || '').trim();\n\nif (item.binary) {\n  const key = item.binary.file ? 'file' : Object.keys(item.binary)[0];\n  if (key) {\n    const b = item.binary[key];\n    const kind = detectKind(b.fileName, b.mimeType);\n    return [{\n      json: {\n        _input_type: 'binary',\n        _file_kind: kind,\n        _file_name: b.fileName || key,\n        _telegram_chat_id: effectiveChat,\n        chat_id: effectiveChat\n      },\n      binary: { file: b }\n    }];\n  }\n}\n\nlet root = item.json?.body ?? item.json;\nif (typeof root === 'string') {\n  try { root = JSON.parse(root); } catch (e) { root = item.json; }\n}\nfunction extractLeads(r) {\n  if (!r) return [];\n  if (Array.isArray(r)) return r;\n  if (Array.isArray(r.data)) return r.data;\n  if (r.data && Array.isArray(r.data.data)) return r.data.data;\n  return [];\n}\nconst leads = extractLeads(root);\nif (!leads.length) throw new Error('No leads found in JSON request.');\nconst contChat = String(root._telegram_chat_id || root.chat_id || effectiveChat || '').trim();\nif (contChat) sd.telegramChatId = contChat;\nreturn [{\n  json: {\n    data: { data: leads },\n    _input_type: 'json',\n    _chunk_part: root._chunk_part || null,\n    _chunk_total: root._chunk_total || null,\n    _pending_chunks: root._pending_chunks,\n    _chunk_meta: root._chunk_meta,\n    _telegram_chat_id: contChat,\n    chat_id: contChat\n  }\n}];\n"
+        "jsCode": "// Route webhook input:\n// - binary file upload (csv/xlsx/json) -> extract path\n// - JSON body -> Chunk Router directly\n// Captures Telegram chat_id from Front Door multipart form / JSON body into workflow staticData.\nconst item = $input.first();\n\nfunction detectKind(fileName, mime) {\n  const name = String(fileName || '').toLowerCase();\n  const m = String(mime || '').toLowerCase();\n  if (name.endsWith('.csv') || m.includes('csv') || m.includes('text/plain')) return 'csv';\n  if (name.endsWith('.xlsx') || m.includes('spreadsheetml')) return 'xlsx';\n  if (name.endsWith('.xls') || m.includes('ms-excel')) return 'xls';\n  if (name.endsWith('.json') || m.includes('json')) return 'json';\n  return 'unknown';\n}\n\nfunction pickChatId(it) {\n  const j = it.json || {};\n  const body = (j.body && typeof j.body === 'object') ? j.body : {};\n  const q = j.query || {};\n  const cand = j.chat_id || j.chatId || body.chat_id || body.chatId ||\n    q.chat_id || q.chatId || j._telegram_chat_id || body._telegram_chat_id || '';\n  return String(cand || '').trim();\n}\n\nconst chatId = pickChatId(item);\nconst sd = $getWorkflowStaticData('global');\nif (chatId) sd.telegramChatId = chatId;\n// Keep last known chat for chunk continuations if form omitted chat_id\nconst effectiveChat = chatId || String(sd.telegramChatId || '').trim();\n\nif (item.binary) {\n  const key = item.binary.file ? 'file' : Object.keys(item.binary)[0];\n  if (key) {\n    const b = item.binary[key];\n    const kind = detectKind(b.fileName, b.mimeType);\n    return [{\n      json: {\n        _input_type: 'binary',\n        _file_kind: kind,\n        _file_name: b.fileName || key,\n        _telegram_chat_id: effectiveChat,\n        chat_id: effectiveChat\n      },\n      binary: { file: b }\n    }];\n  }\n}\n\n// Survey vote continuation from Front Door (one-by-one Q&A)\nlet _peek = item.json?.body ?? item.json;\nif (typeof _peek === 'string') {\n  try { _peek = JSON.parse(_peek); } catch (e) { _peek = item.json; }\n}\nif (_peek && _peek._action === 'survey_vote') {\n  const c = String(_peek.chat_id || _peek.chatId || effectiveChat || '').trim();\n  if (c) sd.telegramChatId = c;\n  return [{\n    json: {\n      _input_type: 'survey_vote',\n      _action: 'survey_vote',\n      account: String(_peek.account || ''),\n      status: String(_peek.status || ''),\n      code: String(_peek.code || ''),\n      chat_id: c || effectiveChat,\n      _telegram_chat_id: c || effectiveChat\n    }\n  }];\n}\n\nlet root = item.json?.body ?? item.json;\nif (typeof root === 'string') {\n  try { root = JSON.parse(root); } catch (e) { root = item.json; }\n}\nfunction extractLeads(r) {\n  if (!r) return [];\n  if (Array.isArray(r)) return r;\n  if (Array.isArray(r.data)) return r.data;\n  if (r.data && Array.isArray(r.data.data)) return r.data.data;\n  return [];\n}\nconst leads = extractLeads(root);\nif (!leads.length) throw new Error('No leads found in JSON request.');\nconst contChat = String(root._telegram_chat_id || root.chat_id || effectiveChat || '').trim();\nif (contChat) sd.telegramChatId = contChat;\nreturn [{\n  json: {\n    data: { data: leads },\n    _input_type: 'json',\n    _chunk_part: root._chunk_part || null,\n    _chunk_total: root._chunk_total || null,\n    _pending_chunks: root._pending_chunks,\n    _chunk_meta: root._chunk_meta,\n    _telegram_chat_id: contChat,\n    chat_id: contChat\n  }\n}];\n"
       },
       "id": "input-router-001",
       "name": "Input Router",
@@ -1161,7 +1161,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const rows = $input.all().map(i => i.json);\nconst sd = $getWorkflowStaticData('global');\nconst chatId = String(sd.telegramChatId || rows[0]?.chat_id || rows[0]?._telegram_chat_id || '').trim();\nconst total = rows.length;\nconst correct = rows.filter(r => String(r['Validation Result']||'').toLowerCase()==='correct').length;\nconst wrong = rows.filter(r => String(r['Validation Result']||'').toLowerCase()==='wrong').length;\nconst manual = rows.filter(r => /manual/i.test(String(r['Validation Result']||''))).length;\nconst high = rows.filter(r => r.Confidence==='High').length;\nconst low = rows.filter(r => r.Confidence==='Low').length;\nconst inj = rows.filter(r => r['Injection Flag']==='Yes').length;\nconst auto = rows.filter(r => r['Auto Accept']==='Yes').length;\nconst part = rows[0]?._chunk_part ? ` (chunk ${rows[0]._chunk_part}/${rows[0]._chunk_total||'?'})` : '';\n\nconst byAgent = {};\nfor (const r of rows) {\n  const a = String(r.Agent || r.agent || 'Unknown').trim() || 'Unknown';\n  if (!byAgent[a]) byAgent[a] = { total: 0, correct: 0, wrong: 0, manual: 0 };\n  byAgent[a].total++;\n  const v = String(r['Validation Result'] || '').toLowerCase();\n  if (v === 'correct') byAgent[a].correct++;\n  else if (v === 'wrong') byAgent[a].wrong++;\n  else if (/manual/.test(v)) byAgent[a].manual++;\n}\nconst agentLines = Object.entries(byAgent)\n  .sort((a, b) => (b[1].wrong - a[1].wrong) || (b[1].total - a[1].total))\n  .slice(0, 12)\n  .map(([a, s]) => {\n    const score = s.total ? Math.round(100 * s.correct / s.total) : 0;\n    return `${a}: ${score}% (${s.correct}/${s.total} ok, ${s.wrong} wrong)`;\n  })\n  .join('\\n');\n\n// Uncertain leads → Telegram button survey (max 12). No n8n links — normal chat buttons.\nconst MAX_SURVEY = 12;\nfunction isUncertain(r) {\n  const conf = String(r.Confidence || '');\n  const vr = String(r['Validation Result'] || '');\n  const skip = r.skipAI === true || r.skipAI === 'true';\n  if (conf === 'Low') return true;\n  if (/manual/i.test(vr)) return true;\n  // AI-path rows that stayed Wrong with only Medium confidence\n  if (!skip && conf === 'Medium' && /wrong/i.test(vr)) return true;\n  return false;\n}\nconst uncertain = rows.filter(isUncertain)\n  .sort((a, b) => {\n    const rank = (r) => (r.Confidence === 'Low' ? 0 : /manual/i.test(String(r['Validation Result']||'')) ? 1 : 2);\n    return rank(a) - rank(b);\n  })\n  .slice(0, MAX_SURVEY)\n  .map(r => ({\n    account: String(r['account no'] || '').trim(),\n    crm: String(r['customer status'] || '').trim(),\n    suggested: String(r['Suggested Status'] || '').trim(),\n    validation: String(r['Validation Result'] || '').trim(),\n    confidence: String(r.Confidence || ''),\n    reason: String(r.Reason || r['Confidence Reason'] || '').slice(0, 160),\n    comments: String(r['last 10 comments'] || '').replace(/\\s+/g, ' ').slice(0, 180),\n    agent: String(r.Agent || '').trim()\n  }))\n  .filter(x => x.account);\n\nsd.pendingSurvey = uncertain;\nsd.surveyChatId = chatId;\n\nconst surveyLine = uncertain.length\n  ? `\\nSurvey: ${uncertain.length} uncertain lead(s) — tap a status button under each message (no links).`\n  : '\\nSurvey: none (no low-confidence / manual rows in this batch).';\n\nconst text =\n`Database check summary${part}\nTotal: ${total}\nCorrect: ${correct}\nWrong: ${wrong}\nManual: ${manual}\nHigh confidence: ${high}\nLow confidence: ${low}\nAuto-accept: ${auto}\nInjection flags: ${inj}\n` + (agentLines ? `\\nAgent score:\\n${agentLines}\\n` : '') +\nsurveyLine +\n`\\nReports (XLSX) will follow.`;\nreturn [{ json: { chat_id: chatId, summary_text: text, _rows_passthrough: true, _survey_count: uncertain.length } }];\n"
+        "jsCode": "const rows = $input.all().map(i => i.json);\nconst sd = $getWorkflowStaticData('global');\nconst chatId = String(sd.telegramChatId || rows[0]?.chat_id || rows[0]?._telegram_chat_id || '').trim();\nconst total = rows.length;\nconst correct = rows.filter(r => String(r['Validation Result']||'').toLowerCase()==='correct').length;\nconst wrong = rows.filter(r => String(r['Validation Result']||'').toLowerCase()==='wrong').length;\nconst manual = rows.filter(r => /manual/i.test(String(r['Validation Result']||''))).length;\nconst high = rows.filter(r => r.Confidence==='High').length;\nconst low = rows.filter(r => r.Confidence==='Low').length;\nconst inj = rows.filter(r => r['Injection Flag']==='Yes').length;\nconst auto = rows.filter(r => r['Auto Accept']==='Yes').length;\nconst part = rows[0]?._chunk_part ? ` (chunk ${rows[0]._chunk_part}/${rows[0]._chunk_total||'?'})` : '';\n\nconst byAgent = {};\nfor (const r of rows) {\n  const a = String(r.Agent || r.agent || 'Unknown').trim() || 'Unknown';\n  if (!byAgent[a]) byAgent[a] = { total: 0, correct: 0, wrong: 0, manual: 0 };\n  byAgent[a].total++;\n  const v = String(r['Validation Result'] || '').toLowerCase();\n  if (v === 'correct') byAgent[a].correct++;\n  else if (v === 'wrong') byAgent[a].wrong++;\n  else if (/manual/.test(v)) byAgent[a].manual++;\n}\nconst agentLines = Object.entries(byAgent)\n  .sort((a, b) => (b[1].wrong - a[1].wrong) || (b[1].total - a[1].total))\n  .slice(0, 12)\n  .map(([a, s]) => {\n    const score = s.total ? Math.round(100 * s.correct / s.total) : 0;\n    return `${a}: ${score}% (${s.correct}/${s.total} ok, ${s.wrong} wrong)`;\n  })\n  .join('\\n');\n\n// Bot Q&A: ambiguous leads asked ONE-BY-ONE on Telegram; answers → Manual Entry file.\nconst MAX_SURVEY = 40;\nfunction isUncertain(r) {\n  if (r._needs_bot_qa === true || r._needs_bot_qa === 'true') return true;\n  const conf = String(r.Confidence || '');\n  const vr = String(r['Validation Result'] || '');\n  if (conf === 'Low') return true;\n  if (/manual/i.test(vr)) return true;\n  return false;\n}\nconst uncertain = rows.filter(isUncertain)\n  .sort((a, b) => {\n    const qa = (a._needs_bot_qa === true || a._needs_bot_qa === 'true') ? 0 : 1;\n    const qb = (b._needs_bot_qa === true || b._needs_bot_qa === 'true') ? 0 : 1;\n    return qa - qb;\n  })\n  .slice(0, MAX_SURVEY)\n  .map(r => ({\n    account: String(r['account no'] || '').trim(),\n    crm: String(r['customer status'] || '').trim(),\n    suggested: String(r['Suggested Status'] || '').trim(),\n    validation: String(r['Validation Result'] || '').trim(),\n    confidence: String(r.Confidence || ''),\n    reason: String(r.Reason || r['Confidence Reason'] || '').slice(0, 160),\n    comments: String(r['last 10 comments'] || '').replace(/\\s+/g, ' ').slice(0, 220),\n    agent: String(r.Agent || '').trim(),\n    brand: String(r.brand || '').trim(),\n    country: String(r.country || '').trim(),\n    office: String(r['Current Agent Office'] || '').trim()\n  }))\n  .filter(x => x.account);\n\nsd.pendingSurvey = uncertain;\nsd.surveyAnswers = [];\nsd.surveyChatId = chatId;\n\n// Engine-certain status changes (for later Manual Entry merge after Q&A)\nfunction statusCanon(s) {\n  const x = String(s || '').trim().toLowerCase().replace(/\\s+/g, ' ');\n  if (/no answer/.test(x) && /5/.test(x)) return 'no answer 5 up';\n  if (/no answer/.test(x)) return 'no answer 1-5';\n  if (/no potential/.test(x)) return 'no potential';\n  return x;\n}\nsd.engineManualCandidates = rows\n  .filter(r => !(r._needs_bot_qa === true || r._needs_bot_qa === 'true'))\n  .filter(r => {\n    const crm = String(r['customer status'] || '').trim();\n    const sug = String(r['Suggested Status'] || '').trim();\n    if (!sug) return false;\n    if (statusCanon(crm) && statusCanon(crm) === statusCanon(sug)) return false;\n    return crm.toLowerCase() !== sug.toLowerCase();\n  })\n  .map(r => ({\n    brand: r.brand || '',\n    'account no': r['account no'] || '',\n    'last 10 comments': String(r['last 10 comments'] || '').slice(0, 450),\n    'customer status': r['Suggested Status'] || '',\n    country: r.country || '',\n    Agent: r.Agent || '',\n    'Current Agent Office': r['Current Agent Office'] || '',\n    'Old Status (CRM)': r['customer status'] || '',\n    Reason: r.Reason || '',\n    'Decision Source': r['Decision Source'] || '',\n    'Match Detail': '',\n    'Applied to CRM': '',\n    'Applied At': '',\n    'Applied By': '',\n    'Review Notes': ''\n  }));\n\n\nconst surveyLine = uncertain.length\n  ? `\\nBot Q&A: ${uncertain.length} uncertain lead(s) — answer ONE status button at a time; Manual Entry file is sent when finished.`\n  : '\\nBot Q&A: none (no ambiguous leads in this batch).';\n\nconst text =\n`Database check summary${part}\nTotal: ${total}\nCorrect: ${correct}\nWrong: ${wrong}\nManual: ${manual}\nHigh confidence: ${high}\nLow confidence: ${low}\nAuto-accept: ${auto}\nInjection flags: ${inj}\n` + (agentLines ? `\\nAgent score:\\n${agentLines}\\n` : '') +\nsurveyLine +\n`\\nReports (XLSX) will follow.`;\nreturn [{ json: { chat_id: chatId, summary_text: text, _rows_passthrough: true, _survey_count: uncertain.length } }];\n"
       },
       "id": "summary-builder",
       "name": "Build Summary Message",
@@ -1262,7 +1262,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Expand pendingSurvey into one Telegram message item each (inline keyboard poll).\nconst sd = $getWorkflowStaticData('global');\nconst chatId = String(\n  $('Input Router').first().json.chat_id ||\n  $('Input Router').first().json._telegram_chat_id ||\n  sd.surveyChatId ||\n  sd.telegramChatId ||\n  $input.first().json.chat_id ||\n  ''\n).trim();\nconst queue = Array.isArray(sd.pendingSurvey) ? sd.pendingSurvey : [];\nif (!queue.length) {\n  return [{ json: { chat_id: chatId, skip_survey: true, survey_text: 'No survey questions.' } }];\n}\n\n// Short codes must fit Telegram callback_data 64-byte limit: v|<account>|<code>\nconst BUTTONS = [\n  [{ t: 'Call Again', c: 'ca' }, { t: 'Recall', c: 'rc' }],\n  [{ t: 'No Answer 1-5', c: 'na' }, { t: 'No Answer 5UP', c: 'n5' }],\n  [{ t: 'No Interest', c: 'ni' }, { t: 'No Potential', c: 'np' }],\n  [{ t: 'Wrong Number', c: 'wn' }, { t: 'Denied Reg', c: 'dr' }],\n  [{ t: 'Keep CRM', c: 'keep' }],\n];\n\nreturn queue.map((q, i) => {\n  const acc = String(q.account || '').slice(0, 40);\n  const rows = BUTTONS.map(row => ({\n    row: {\n      buttons: row.map(b => ({\n        text: b.t,\n        additionalFields: { callback_data: `v|${acc}|${b.c}` }\n      }))\n    }\n  }));\n  const text =\n`Uncertain lead ${i + 1}/${queue.length}\nAccount: ${q.account}\nCRM: ${q.crm || '-'}\nSuggested: ${q.suggested || '-'} (${q.validation || '?'}, ${q.confidence || '?'})\nAgent: ${q.agent || '-'}\nWhy: ${q.reason || '-'}\nComment: ${q.comments || '-'}\n\nWhat should the status be? Tap one button:`;\n  return {\n    json: {\n      chat_id: chatId,\n      survey_text: text,\n      account: q.account,\n      _survey_index: i + 1,\n      _survey_total: queue.length,\n      reply_markup_rows: rows\n    }\n  };\n});\n"
+        "jsCode": "// Send ONLY the first pending uncertain lead (one-by-one Q&A).\nconst sd = $getWorkflowStaticData('global');\nconst chatId = String(\n  $('Input Router').first().json.chat_id ||\n  $('Input Router').first().json._telegram_chat_id ||\n  sd.surveyChatId ||\n  sd.telegramChatId ||\n  $input.first().json.chat_id ||\n  ''\n).trim();\nconst queue = Array.isArray(sd.pendingSurvey) ? sd.pendingSurvey : [];\nif (!queue.length) {\n  return [{ json: { chat_id: chatId, skip_survey: true, survey_text: 'No survey questions.' } }];\n}\n\nconst total = queue.length;\nconst q = queue[0];\nconst text =\n`Uncertain lead 1/${total}\nAccount: ${q.account}\nCRM: ${q.crm || '-'}\nAgent: ${q.agent || '-'}\nWhy: ${q.reason || '-'}\nComment: ${q.comments || '-'}\n\nWhat should the status be? Tap one button (next lead comes after your answer):`;\n\nreturn [{\n  json: {\n    chat_id: chatId,\n    survey_text: text,\n    account: q.account,\n    _survey_index: 1,\n    _survey_total: total,\n    skip_survey: false\n  }\n}];\n"
       },
       "id": "build-survey-msgs",
       "name": "Build Survey Messages",
@@ -1419,6 +1419,223 @@
         3150,
         120
       ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Ambiguous leads: do NOT call AI Agent.\n// Ask status one-by-one on Telegram; Manual Entry is built after answers.\nreturn $input.all().map(item => {\n  const j = { ...item.json };\n  const crm = String(j[\"customer status\"] || \"\").trim();\n  return {\n    json: {\n      ...j,\n      skipAI: true,\n      _needs_bot_qa: true,\n      \"Suggested Status\": crm,\n      \"Validation Result\": \"Manual Check\",\n      \"Decision Source\": \"Bot Q&A pending\",\n      \"Reason\": \"Ambiguous lead — choose status with Telegram buttons (one at a time).\",\n      \"Matched Keyword\": j[\"Matched Keyword\"] || \"\",\n      Confidence: \"Low\",\n      \"Review Priority\": \"High\",\n      memory_matched: false\n    }\n  };\n});\n"
+      },
+      "id": "7c57db19-0c19-4512-b8a7-174ae49dd61a",
+      "name": "Mark Awaiting Human",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -624,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "a98c1b94-d6ec-48c8-be42-a71c6dd8f529",
+              "leftValue": "={{ $json._input_type }}",
+              "rightValue": "survey_vote",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "4686a5d4-edec-49a9-a86e-2f347a5b3ebf",
+      "name": "Survey Action?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1780,
+        -416
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Apply one Telegram status vote, then either ask next lead or finish Manual Entry.\nconst sd = $getWorkflowStaticData('global');\nconst j = $input.first().json;\nconst account = String(j.account || '').trim();\nconst status = String(j.status || '').trim();\nconst code = String(j.code || '').trim();\nconst chatId = String(j.chat_id || sd.surveyChatId || sd.telegramChatId || '').trim();\nif (chatId) {\n  sd.surveyChatId = chatId;\n  sd.telegramChatId = chatId;\n}\n\nconst queue = Array.isArray(sd.pendingSurvey) ? sd.pendingSurvey.slice() : [];\nconst answers = Array.isArray(sd.surveyAnswers) ? sd.surveyAnswers.slice() : [];\n\nlet hit = null;\nconst nextQueue = [];\nfor (const q of queue) {\n  if (!hit && String(q.account || '').trim() === account) hit = q;\n  else nextQueue.push(q);\n}\n// If account not found, still accept vote against the head (safety)\nif (!hit && queue.length) {\n  hit = queue[0];\n  nextQueue.splice(0, nextQueue.length, ...queue.slice(1));\n}\n\nif (hit) {\n  answers.push({\n    ...hit,\n    human_status: status,\n    code,\n    answered_at: new Date().toISOString()\n  });\n}\nsd.surveyAnswers = answers;\nsd.pendingSurvey = nextQueue;\n\nif (nextQueue.length > 0) {\n  const q = nextQueue[0];\n  const total = nextQueue.length + answers.length;\n  const idx = answers.length + 1;\n  const text =\n`Uncertain lead ${idx}/${total}\nAccount: ${q.account}\nCRM: ${q.crm || '-'}\nAgent: ${q.agent || '-'}\nWhy: ${q.reason || '-'}\nComment: ${q.comments || '-'}\n\nWhat should the status be? Tap one button:`;\n  return [{\n    json: {\n      _survey_phase: 'next',\n      chat_id: chatId,\n      account: q.account,\n      survey_text: text,\n      skip_survey: false\n    }\n  }];\n}\n\n// Done — build manual entry rows from answers (+ engine candidates)\nconst engine = Array.isArray(sd.engineManualCandidates) ? sd.engineManualCandidates : [];\nconst seen = new Set();\nconst rows = [];\n\nfunction pushRow(r) {\n  const acc = String(r['account no'] || r.account || '').trim();\n  if (!acc || seen.has(acc)) return;\n  seen.add(acc);\n  rows.push(r);\n}\n\nfor (const a of answers) {\n  const human = String(a.human_status || '').trim();\n  if (!human || /^keep crm$/i.test(human)) continue; // no CRM change\n  pushRow({\n    brand: a.brand || '',\n    'account no': a.account || '',\n    'last 10 comments': a.comments || '',\n    'customer status': human,\n    country: a.country || '',\n    Agent: a.agent || '',\n    'Current Agent Office': a.office || '',\n    'Old Status (CRM)': a.crm || '',\n    Reason: `Human bot Q&A (${a.code || 'vote'})`,\n    'Decision Source': 'telegram_bot_qa',\n    'Match Detail': a.reason || '',\n    'Applied to CRM': '',\n    'Applied At': '',\n    'Applied By': '',\n    'Review Notes': ''\n  });\n}\nfor (const e of engine) pushRow(e);\n\nsd.pendingSurvey = [];\n// keep answers for debug; clear engine snapshot\nsd.engineManualCandidates = [];\n\nif (!rows.length) {\n  return [{\n    json: {\n      _survey_phase: 'done_empty',\n      chat_id: chatId,\n      done_text: '✅ All questions answered. No CRM status changes to put in Manual Entry (Keep CRM / no diffs).'\n    }\n  }];\n}\n\nreturn rows.map((r, i) => ({\n  json: {\n    ...r,\n    _survey_phase: 'done',\n    chat_id: chatId,\n    _qa_manual: true,\n    _qa_index: i,\n    _qa_total: rows.length,\n    done_text: `✅ All questions answered (${answers.length}). Manual Entry file with ${rows.length} row(s) follows.`\n  }\n}));\n"
+      },
+      "id": "0ff6ae8f-a415-46ae-899e-d521bcfea530",
+      "name": "Survey Vote Handler",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1560,
+        -616
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "12fbef5d-be4f-46f0-9a8f-ad80cb835065",
+              "leftValue": "={{ $json._survey_phase }}",
+              "rightValue": "next",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "66dbb813-fca5-4354-9ddf-9edb0dcaf9af",
+      "name": "Survey Phase?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1340,
+        -616
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "a561c535-84e6-4d5b-bf07-84afa2ef54f2",
+              "leftValue": "={{ $json._survey_phase }}",
+              "rightValue": "done",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e89b34e2-f256-41fb-9987-0d1db648a70a",
+      "name": "QA Has Rows?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1120,
+        -456
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const j = $input.first().json;\nreturn [{ json: { chat_id: j.chat_id, done_text: j.done_text || '✅ Q&A complete.', skip_survey: true } }];\n"
+      },
+      "id": "591241c1-fe15-4afe-b172-bf591a537442",
+      "name": "Prep QA Done Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -900,
+        -336
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ String(($('Input Router').first().json.chat_id || $('Input Router').first().json._telegram_chat_id || $getWorkflowStaticData('global').telegramChatId || $json.chat_id || '')).trim() }}",
+        "text": "={{ $json.done_text }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "5831e91b-8a1d-4e77-9e05-e058c80d25b7",
+      "name": "Send QA Done Text",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -680,
+        -336
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "q14sD9Geek2ExOku",
+          "name": "Telegram account"
+        }
+      },
+      "webhookId": "a861bbb2-690f-4182-8852-8fb8b15535dc"
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "options": {
+          "fileName": "={{ 'CRM_Manual_Entry_QA_' + $now.setZone('Europe/Istanbul').toFormat('yyyy-MM-dd_HH-mm') + '.xlsx' }}"
+        }
+      },
+      "id": "79865ed7-1433-467d-a330-8afaff2285bd",
+      "name": "Convert QA Manual Entry",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        -900,
+        -536
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendDocument",
+        "chatId": "={{ String(($('Input Router').first().json.chat_id || $('Input Router').first().json._telegram_chat_id || $getWorkflowStaticData('global').telegramChatId || $json.chat_id || '')).trim() }}",
+        "binaryData": true,
+        "additionalFields": {
+          "caption": "Manual Entry (bot Q&A answers) — review and enter into CRM"
+        }
+      },
+      "id": "59f5d764-8953-4ee8-815f-ae30579056a6",
+      "name": "Send QA Manual Entry",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -680,
+        -536
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "q14sD9Geek2ExOku",
+          "name": "Telegram account"
+        }
+      },
+      "webhookId": "88e8130c-9cf8-4f48-8efe-7ebd80ed87c4"
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(i => i.json).filter(j => j._survey_phase === 'done');\nconst chatId = String(rows[0]?.chat_id || '');\nconst sd = $getWorkflowStaticData('global');\nif (chatId) { sd.telegramChatId = chatId; sd.surveyChatId = chatId; }\nconst cols = ['brand','account no','last 10 comments','customer status','country','Agent','Current Agent Office','Old Status (CRM)','Reason','Decision Source','Match Detail','Applied to CRM','Applied At','Applied By','Review Notes'];\nreturn rows.map(j => {\n  const out = {};\n  for (const c of cols) out[c] = j[c] || '';\n  return { json: out };\n});\n"
+      },
+      "id": "8a1203d4-16fc-4d86-8685-5b792677bf22",
+      "name": "Prep QA Manual Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1010,
+        -536
+      ]
     }
   ],
   "connections": {
@@ -1515,7 +1732,7 @@
         ],
         [
           {
-            "node": "Build AI Batches",
+            "node": "Mark Awaiting Human",
             "type": "main",
             "index": 0
           }
@@ -1777,7 +1994,7 @@
       "main": [
         [
           {
-            "node": "Input Type",
+            "node": "Survey Action?",
             "type": "main",
             "index": 0
           }
@@ -2053,6 +2270,115 @@
           }
         ],
         []
+      ]
+    },
+    "Mark Awaiting Human": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Survey Action?": {
+      "main": [
+        [
+          {
+            "node": "Survey Vote Handler",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Input Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Survey Vote Handler": {
+      "main": [
+        [
+          {
+            "node": "Survey Phase?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Survey Phase?": {
+      "main": [
+        [
+          {
+            "node": "Send Survey Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "QA Has Rows?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "QA Has Rows?": {
+      "main": [
+        [
+          {
+            "node": "Prep QA Manual Rows",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prep QA Done Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep QA Done Text": {
+      "main": [
+        [
+          {
+            "node": "Send QA Done Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep QA Manual Rows": {
+      "main": [
+        [
+          {
+            "node": "Convert QA Manual Entry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert QA Manual Entry": {
+      "main": [
+        [
+          {
+            "node": "Send QA Manual Entry",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },
