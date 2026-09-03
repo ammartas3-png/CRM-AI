@@ -138,6 +138,32 @@ CALLBACK_RE = re.compile(
     r"tomorrow|tmrw|2moro|today|tonight|next week|\b(mon|tue|wed|thu|fri|sat|sun)(day)?\b)",
     re.I,
 )
+# Agent notes like "didn't give me time to talk" / mockery must NOT count as customer callback.
+CALLBACK_FALSE_RE = re.compile(
+    r"\b(didnt give (me |us |him |her )?(any |some )?(time|a chance)|"
+    r"did not give (me |us |him |her )?(any |some )?(time|a chance)|"
+    r"no time to talk|didnt let (me |us )?(speak|talk)|did not let (me |us )?(speak|talk)|"
+    r"playing around|laughing|mumbling|uneducated|wasting (my |our )?time|"
+    r"making fun|just joking|cut (me off|the call))\b",
+    re.I,
+)
+CONCRETE_TIME_RE = re.compile(
+    r"\b(tomorrow|tmrw|2moro|today|tonight|next week|"
+    r"monday|tuesday|wednesday|thursday|friday|saturday|sunday|"
+    r"after \d+\s?(am|pm|hour|hours)|at \d{1,2}|"
+    r"\d{1,2}\s?(am|pm))\b",
+    re.I,
+)
+
+
+def has_callback(text: str) -> bool:
+    """True when text has a real callback signal (not 'didn't give me time to talk')."""
+    t = fold(text)
+    if not t or not CALLBACK_RE.search(t):
+        return False
+    if CALLBACK_FALSE_RE.search(t) and not CONCRETE_TIME_RE.search(t):
+        return False
+    return True
 MONEY_RE = re.compile(r"\b(no money|dont have money|do not have money|no funds|cannot afford|cant afford|no income)\b", re.I)
 WRONG_NUM_RE = re.compile(
     r"\b(wrong number|wrong no\b|wrong num\b|not my number|not the (right )?(person|number)|"
@@ -240,7 +266,7 @@ def classify_lead(lead: dict[str, Any]) -> ClassifyResult:
 
     # 1) currently busy / telecom busy without pickup talk → No Answer
     if BUSY_ONLY_RE.search(full) or (newest and re.search(r"\bcurrently busy\b", newest_norm)):
-        if not PICKUP_BUSY_RE.search(full) and not CALLBACK_RE.search(newest_norm):
+        if not PICKUP_BUSY_RE.search(full) and not has_callback(newest_norm):
             if crm_c in {"call again", "recall"} and streak < 5 and streak > 0:
                 keep = "Recall" if crm_c == "recall" else "Call Again"
                 return done(keep, "rule-engine:call_again_kept_under_5na", f"busy/NA streak={streak} (<5) keep {keep}")
@@ -255,14 +281,22 @@ def classify_lead(lead: dict[str, Any]) -> ClassifyResult:
         return done("Call Again", "rule-engine:busy_after_pickup", "pu+busy contact => Call Again")
 
     # 5) no money + concrete callback in newest / full → Call Again
-    if MONEY_RE.search(full) and CALLBACK_RE.search(full):
-        # prefer newest body
-        if CALLBACK_RE.search(newest_norm) or CALLBACK_RE.search(full):
+    if MONEY_RE.search(full) and has_callback(full):
+        if has_callback(newest_norm) or has_callback(full):
             return done("Call Again", "rule-engine:money_plus_callback", "no money + concrete callback => Call Again (callback wins)")
 
     # 8) Recall + newer callback → Call Again
-    if crm_c == "recall" and CALLBACK_RE.search(newest_norm):
+    if crm_c == "recall" and has_callback(newest_norm):
         return done("Call Again", "rule-engine:recall_to_call_again", "Recall CRM but newest comment has concrete callback => Call Again")
+
+    # Mockery / "didn't give me time to talk" — not a callback request
+    if newest and CALLBACK_FALSE_RE.search(newest_norm) and not has_callback(newest_norm):
+        return done(
+            "No Interest",
+            "rule-engine:noncoop_in_newest",
+            "Newest comment is non-cooperative / no time to talk (not a customer callback request).",
+            detail="noncoop / didnt give time",
+        )
 
     # 4) Call Again kept until 5 distinct NA days
     if crm_c in {"call again", "recall"}:
@@ -272,11 +306,11 @@ def classify_lead(lead: dict[str, Any]) -> ClassifyResult:
             keep = "Recall" if crm_c == "recall" else "Call Again"
             return done(keep, "rule-engine:call_again_kept_under_5na", f"streak days={streak} (<5) keep {keep}", detail=f"streak days={streak}")
         # CRM already CA/Recall and no hard override → Correct keep
-        if not MONEY_RE.search(newest_norm) or CALLBACK_RE.search(newest_norm):
+        if not MONEY_RE.search(newest_norm) or has_callback(newest_norm):
             keep = crm if crm else ("Recall" if crm_c == "recall" else "Call Again")
             # If callback in comments, still Call Again
-            if CALLBACK_RE.search(full):
-                return done("Call Again" if crm_c != "recall" or CALLBACK_RE.search(newest_norm) else keep,
+            if has_callback(full):
+                return done("Call Again" if crm_c != "recall" or has_callback(newest_norm) else keep,
                             "rule-engine:keep_crm_call_again", f"CRM {keep} kept (no 5-day NA streak)")
             return done(keep, "rule-engine:keep_crm_call_again", f"CRM {keep} kept", skip=True, conf="Medium")
 
