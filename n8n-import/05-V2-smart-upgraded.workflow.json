@@ -54,7 +54,7 @@
     {
       "parameters": {
         "operation": "sendDocument",
-        "chatId": "={{ String($getWorkflowStaticData('global').telegramChatId || $json.chat_id || '') }}",
+        "chatId": "={{ String(($('Input Router').first().json.chat_id || $('Input Router').first().json._telegram_chat_id || $getWorkflowStaticData('global').telegramChatId || $json.chat_id || '')).trim() }}",
         "binaryData": true,
         "additionalFields": {}
       },
@@ -502,7 +502,7 @@
     {
       "parameters": {
         "operation": "sendDocument",
-        "chatId": "={{ String($getWorkflowStaticData('global').telegramChatId || $json.chat_id || '') }}",
+        "chatId": "={{ String(($('Input Router').first().json.chat_id || $('Input Router').first().json._telegram_chat_id || $getWorkflowStaticData('global').telegramChatId || $json.chat_id || '')).trim() }}",
         "binaryData": true,
         "additionalFields": {
           "caption": "No Answer 1-5 -> No Answer 5 UP gecis adaylari (5+ farkli gun cevapsiz)"
@@ -664,7 +664,7 @@
     {
       "parameters": {
         "operation": "sendDocument",
-        "chatId": "={{ String($getWorkflowStaticData('global').telegramChatId || $json.chat_id || '') }}",
+        "chatId": "={{ String(($('Input Router').first().json.chat_id || $('Input Router').first().json._telegram_chat_id || $getWorkflowStaticData('global').telegramChatId || $json.chat_id || '')).trim() }}",
         "binaryData": true,
         "additionalFields": {}
       },
@@ -686,7 +686,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Auto-split ONLY large uploads into sequential chunks (one at a time — no parallel OOM).\n// Files up to MAX leads process in ONE run → one Telegram report set.\n// Larger files: remaining chunks are passed IN the next webhook body (not only staticData)\n// so a race cannot drop parts 3/4.\nconst MAX = 2500;\nconst WEBHOOK = (typeof $env !== 'undefined' && ($env.N8N_WEBHOOK_DATABASE_CHECK || $env.DATABASE_CHECK_WEBHOOK_URL))\n  || \"https://ammartd20.app.n8n.cloud/webhook/Database-check\";\n\nfunction extractLeads(root) {\n  if (!root) return [];\n  if (Array.isArray(root)) return root;\n  if (Array.isArray(root.data)) return root.data;\n  if (root.data && Array.isArray(root.data.data)) return root.data.data;\n  return [];\n}\n\nconst root = $input.first().json;\nconst sd = $getWorkflowStaticData(\"global\");\nconst chatId = String(root._telegram_chat_id || root.chat_id || sd.telegramChatId || \"\").trim();\nif (chatId) sd.telegramChatId = chatId;\n\n// Sub-chunk: restore pending queue from body (authoritative), then process this part.\nif (root._chunk_part) {\n  if (Array.isArray(root._pending_chunks)) sd.pendingChunks = root._pending_chunks;\n  if (root._chunk_meta && typeof root._chunk_meta === \"object\") sd.chunkMeta = root._chunk_meta;\n  else sd.chunkMeta = { part: root._chunk_part, total: root._chunk_total || 1 };\n  if (chatId) sd.telegramChatId = chatId;\n  const leads = extractLeads(root);\n  return [{ json: {\n    data: { data: leads },\n    _chunk_part: root._chunk_part,\n    _chunk_total: root._chunk_total,\n    _telegram_chat_id: sd.telegramChatId || chatId\n  } }];\n}\n\nconst leads = extractLeads(root);\nif (!leads.length) throw new Error(\"No leads found in uploaded file.\");\n\n// Single-shot: clear any stale queue from a previous interrupted run.\nif (leads.length <= MAX) {\n  sd.pendingChunks = [];\n  sd.chunkMeta = { part: 1, total: 1 };\n  return [{ json: { data: { data: leads }, _telegram_chat_id: sd.telegramChatId || chatId } }];\n}\n\nconst nChunks = Math.ceil(leads.length / MAX);\nsd.pendingChunks = [];\nfor (let i = 1; i < nChunks; i++) {\n  sd.pendingChunks.push(leads.slice(i * MAX, (i + 1) * MAX));\n}\nsd.chunkMeta = { part: 1, total: nChunks };\n\nconst chunk1 = leads.slice(0, MAX);\nreturn [{\n  json: {\n    data: { data: chunk1 },\n    _chunk_part: 1,\n    _chunk_total: nChunks,\n    _telegram_chat_id: sd.telegramChatId || chatId,\n    _chunk_info: `Part 1/${nChunks} (${chunk1.length} leads). Next parts run automatically; each part still sends its own reports until the file is fully done.`\n  }\n}];\n"
+        "jsCode": "// Auto-split ONLY large uploads into sequential chunks (one at a time — no parallel OOM).\n// Files up to MAX leads process in ONE run → one Telegram report set.\n// Larger files: remaining chunks are passed IN the next webhook body (not only staticData)\n// so a race cannot drop parts 3/4.\nconst MAX = 2500;\nconst WEBHOOK = \"https://ammartd20.app.n8n.cloud/webhook/Database-check\";\n\nfunction extractLeads(root) {\n  if (!root) return [];\n  if (Array.isArray(root)) return root;\n  if (Array.isArray(root.data)) return root.data;\n  if (root.data && Array.isArray(root.data.data)) return root.data.data;\n  return [];\n}\n\nconst root = $input.first().json;\nconst sd = $getWorkflowStaticData(\"global\");\nconst chatId = String(root._telegram_chat_id || root.chat_id || sd.telegramChatId || \"\").trim();\nif (chatId) sd.telegramChatId = chatId;\n\n// Sub-chunk: restore pending queue from body (authoritative), then process this part.\nif (root._chunk_part) {\n  if (Array.isArray(root._pending_chunks)) sd.pendingChunks = root._pending_chunks;\n  if (root._chunk_meta && typeof root._chunk_meta === \"object\") sd.chunkMeta = root._chunk_meta;\n  else sd.chunkMeta = { part: root._chunk_part, total: root._chunk_total || 1 };\n  if (chatId) sd.telegramChatId = chatId;\n  const leads = extractLeads(root);\n  return [{ json: {\n    data: { data: leads },\n    _chunk_part: root._chunk_part,\n    _chunk_total: root._chunk_total,\n    _telegram_chat_id: sd.telegramChatId || chatId\n  } }];\n}\n\nconst leads = extractLeads(root);\nif (!leads.length) throw new Error(\"No leads found in uploaded file.\");\n\n// Single-shot: clear any stale queue from a previous interrupted run.\nif (leads.length <= MAX) {\n  sd.pendingChunks = [];\n  sd.chunkMeta = { part: 1, total: 1 };\n  return [{ json: { data: { data: leads }, _telegram_chat_id: sd.telegramChatId || chatId } }];\n}\n\nconst nChunks = Math.ceil(leads.length / MAX);\nsd.pendingChunks = [];\nfor (let i = 1; i < nChunks; i++) {\n  sd.pendingChunks.push(leads.slice(i * MAX, (i + 1) * MAX));\n}\nsd.chunkMeta = { part: 1, total: nChunks };\n\nconst chunk1 = leads.slice(0, MAX);\nreturn [{\n  json: {\n    data: { data: chunk1 },\n    _chunk_part: 1,\n    _chunk_total: nChunks,\n    _telegram_chat_id: sd.telegramChatId || chatId,\n    _chunk_info: `Part 1/${nChunks} (${chunk1.length} leads). Next parts run automatically; each part still sends its own reports until the file is fully done.`\n  }\n}];\n"
       },
       "id": "chunk-router-001",
       "name": "Chunk Router",
@@ -779,7 +779,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// After Telegram files are sent, trigger the next queued chunk (sequential — no overlap).\n// Pass remaining pending chunks IN the webhook body so the next execution cannot lose them\n// if staticData has not flushed yet (race that dropped parts 3/4 on 1791-lead file).\nconst WEBHOOK = (typeof $env !== 'undefined' && ($env.N8N_WEBHOOK_DATABASE_CHECK || $env.DATABASE_CHECK_WEBHOOK_URL))\n  || \"https://ammartd20.app.n8n.cloud/webhook/Database-check\";\nconst sd = $getWorkflowStaticData(\"global\");\nconst pending = Array.isArray(sd.pendingChunks) ? sd.pendingChunks.slice() : [];\nconst chatId = String(sd.telegramChatId || \"\").trim();\n\nif (!pending.length) {\n  sd.pendingChunks = [];\n  return [{ json: { status: \"complete\", message: \"All chunks finished.\" } }];\n}\n\nconst meta = sd.chunkMeta || { part: 1, total: 1 };\nconst chunk = pending.shift();\nsd.pendingChunks = pending;\nconst nextPart = (meta.part || 1) + 1;\nconst total = meta.total || 1;\nconst nextMeta = { part: nextPart, total };\nsd.chunkMeta = nextMeta;\n\nawait this.helpers.httpRequest({\n  method: \"POST\",\n  url: WEBHOOK,\n  body: {\n    data: chunk,\n    _chunk_part: nextPart,\n    _chunk_total: total,\n    _pending_chunks: pending,\n    _chunk_meta: nextMeta,\n    _telegram_chat_id: chatId,\n    chat_id: chatId\n  },\n  json: true,\n});\n\nreturn [{ json: { status: \"scheduled\", part: nextPart, total, remaining: pending.length, chat_id: chatId } }];\n"
+        "jsCode": "// After Telegram files are sent, trigger the next queued chunk (sequential — no overlap).\n// Pass remaining pending chunks IN the webhook body so the next execution cannot lose them\n// if staticData has not flushed yet (race that dropped parts 3/4 on 1791-lead file).\nconst WEBHOOK = \"https://ammartd20.app.n8n.cloud/webhook/Database-check\";\nconst sd = $getWorkflowStaticData(\"global\");\nconst pending = Array.isArray(sd.pendingChunks) ? sd.pendingChunks.slice() : [];\nconst chatId = String(sd.telegramChatId || \"\").trim();\n\nif (!pending.length) {\n  sd.pendingChunks = [];\n  return [{ json: { status: \"complete\", message: \"All chunks finished.\" } }];\n}\n\nconst meta = sd.chunkMeta || { part: 1, total: 1 };\nconst chunk = pending.shift();\nsd.pendingChunks = pending;\nconst nextPart = (meta.part || 1) + 1;\nconst total = meta.total || 1;\nconst nextMeta = { part: nextPart, total };\nsd.chunkMeta = nextMeta;\n\nawait this.helpers.httpRequest({\n  method: \"POST\",\n  url: WEBHOOK,\n  body: {\n    data: chunk,\n    _chunk_part: nextPart,\n    _chunk_total: total,\n    _pending_chunks: pending,\n    _chunk_meta: nextMeta,\n    _telegram_chat_id: chatId,\n    chat_id: chatId\n  },\n  json: true,\n});\n\nreturn [{ json: { status: \"scheduled\", part: nextPart, total, remaining: pending.length, chat_id: chatId } }];\n"
       },
       "id": "schedule-next-chunk-001",
       "name": "Schedule Next Chunk",
@@ -1175,7 +1175,7 @@
     {
       "parameters": {
         "operation": "sendMessage",
-        "chatId": "={{ String($getWorkflowStaticData('global').telegramChatId || $json.chat_id || '') }}",
+        "chatId": "={{ String(($('Input Router').first().json.chat_id || $('Input Router').first().json._telegram_chat_id || $getWorkflowStaticData('global').telegramChatId || $json.chat_id || '')).trim() }}",
         "text": "={{ $json.summary_text }}",
         "additionalFields": {
           "appendAttribution": false
@@ -1262,7 +1262,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Expand pendingSurvey into one Telegram message item each (inline keyboard poll).\nconst sd = $getWorkflowStaticData('global');\nconst chatId = String(sd.surveyChatId || sd.telegramChatId || $input.first().json.chat_id || '').trim();\nconst queue = Array.isArray(sd.pendingSurvey) ? sd.pendingSurvey : [];\nif (!queue.length) {\n  return [{ json: { chat_id: chatId, skip_survey: true, survey_text: 'No survey questions.' } }];\n}\n\n// Short codes must fit Telegram callback_data 64-byte limit: v|<account>|<code>\nconst BUTTONS = [\n  [{ t: 'Call Again', c: 'ca' }, { t: 'Recall', c: 'rc' }],\n  [{ t: 'No Answer 1-5', c: 'na' }, { t: 'No Answer 5UP', c: 'n5' }],\n  [{ t: 'No Interest', c: 'ni' }, { t: 'No Potential', c: 'np' }],\n  [{ t: 'Wrong Number', c: 'wn' }, { t: 'Denied Reg', c: 'dr' }],\n  [{ t: 'Keep CRM', c: 'keep' }],\n];\n\nreturn queue.map((q, i) => {\n  const acc = String(q.account || '').slice(0, 40);\n  const rows = BUTTONS.map(row => ({\n    row: {\n      buttons: row.map(b => ({\n        text: b.t,\n        additionalFields: { callback_data: `v|${acc}|${b.c}` }\n      }))\n    }\n  }));\n  const text =\n`Uncertain lead ${i + 1}/${queue.length}\nAccount: ${q.account}\nCRM: ${q.crm || '-'}\nSuggested: ${q.suggested || '-'} (${q.validation || '?'}, ${q.confidence || '?'})\nAgent: ${q.agent || '-'}\nWhy: ${q.reason || '-'}\nComment: ${q.comments || '-'}\n\nWhat should the status be? Tap one button:`;\n  return {\n    json: {\n      chat_id: chatId,\n      survey_text: text,\n      account: q.account,\n      _survey_index: i + 1,\n      _survey_total: queue.length\n    },\n    // also pass markup fields for expression-based telegram node if needed\n    reply_markup_rows: rows\n  };\n});\n"
+        "jsCode": "// Expand pendingSurvey into one Telegram message item each (inline keyboard poll).\nconst sd = $getWorkflowStaticData('global');\nconst chatId = String(\n  $('Input Router').first().json.chat_id ||\n  $('Input Router').first().json._telegram_chat_id ||\n  sd.surveyChatId ||\n  sd.telegramChatId ||\n  $input.first().json.chat_id ||\n  ''\n).trim();\nconst queue = Array.isArray(sd.pendingSurvey) ? sd.pendingSurvey : [];\nif (!queue.length) {\n  return [{ json: { chat_id: chatId, skip_survey: true, survey_text: 'No survey questions.' } }];\n}\n\n// Short codes must fit Telegram callback_data 64-byte limit: v|<account>|<code>\nconst BUTTONS = [\n  [{ t: 'Call Again', c: 'ca' }, { t: 'Recall', c: 'rc' }],\n  [{ t: 'No Answer 1-5', c: 'na' }, { t: 'No Answer 5UP', c: 'n5' }],\n  [{ t: 'No Interest', c: 'ni' }, { t: 'No Potential', c: 'np' }],\n  [{ t: 'Wrong Number', c: 'wn' }, { t: 'Denied Reg', c: 'dr' }],\n  [{ t: 'Keep CRM', c: 'keep' }],\n];\n\nreturn queue.map((q, i) => {\n  const acc = String(q.account || '').slice(0, 40);\n  const rows = BUTTONS.map(row => ({\n    row: {\n      buttons: row.map(b => ({\n        text: b.t,\n        additionalFields: { callback_data: `v|${acc}|${b.c}` }\n      }))\n    }\n  }));\n  const text =\n`Uncertain lead ${i + 1}/${queue.length}\nAccount: ${q.account}\nCRM: ${q.crm || '-'}\nSuggested: ${q.suggested || '-'} (${q.validation || '?'}, ${q.confidence || '?'})\nAgent: ${q.agent || '-'}\nWhy: ${q.reason || '-'}\nComment: ${q.comments || '-'}\n\nWhat should the status be? Tap one button:`;\n  return {\n    json: {\n      chat_id: chatId,\n      survey_text: text,\n      account: q.account,\n      _survey_index: i + 1,\n      _survey_total: queue.length,\n      reply_markup_rows: rows\n    }\n  };\n});\n"
       },
       "id": "build-survey-msgs",
       "name": "Build Survey Messages",
@@ -1276,7 +1276,7 @@
     {
       "parameters": {
         "operation": "sendMessage",
-        "chatId": "={{ String($getWorkflowStaticData('global').telegramChatId || $json.chat_id || '') }}",
+        "chatId": "={{ String(($('Input Router').first().json.chat_id || $('Input Router').first().json._telegram_chat_id || $getWorkflowStaticData('global').telegramChatId || $json.chat_id || '')).trim() }}",
         "text": "={{ $json.survey_text }}",
         "additionalFields": {
           "appendAttribution": false,
@@ -9198,7 +9198,8 @@
           "example_comment": "2026-09-02 7:48 | Abdullah Ad | v123 call cannot be proccesed as dailed/not reachable;\n2026-09-02 7:47 | Abdullah Ad | Email لاستثمار بالذكاء الاصطناعي was sent by Abdullah Ad;\n2026-09-02 7:47 | Abdullah Ad | Email Riverquode: Wrong Number Used was sent by Abdullah Ad;\n2026-09-02",
           "created_at": "2026-09-02T11:53:59.318Z"
         }
-      ]
+      ],
+      "telegramChatId": "1240141730"
     }
   }
 }
