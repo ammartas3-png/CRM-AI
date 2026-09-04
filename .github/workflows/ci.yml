@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "cursor/**"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install rule-engine deps
+        run: |
+          pip install -r services/rule-engine/requirements.txt
+          pip install -r services/smart-layer/requirements.txt || true
+          pip install -r services/quality-layer/requirements.txt
+          pip install pytest openpyxl pandas
+      - name: Rule system validate
+        run: python scripts/validate_rule_system.py
+      - name: Unit + golden tests
+        run: |
+          python services/tests/test_crm_classify.py
+          python services/tests/test_rule_engine.py
+          python services/tests/test_golden_classify.py
+          python services/tests/smoke_test.py
+          python services/tests/test_exact_cache.py
+          python services/tests/test_lead_gate.py
+      - name: Pytest
+        run: python -m pytest -q services/tests
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: n8n Memory Match regression
+        run: node scripts/mm_harness.js
+      - name: n8n appointment guards
+        run: node scripts/appt_harness.js

@@ -1,0 +1,6 @@
+.env
+__pycache__/
+*.pyc
+third_party/*
+!third_party/README.md
+evals/conflict_report.json

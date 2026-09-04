@@ -1,0 +1,82 @@
+{
+  "name": "MCP Database Check Tool",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "database-check-mcp"
+      },
+      "id": "mcp-trigger",
+      "name": "MCP Server Trigger",
+      "type": "@n8n/n8n-nodes-langchain.mcpTrigger",
+      "typeVersion": 1,
+      "position": [260, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CREWAI_SERVICE_URL || 'http://crewai-service:8080' }}/validate",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "source",
+              "value": "mcp"
+            },
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "data"
+            }
+          ]
+        }
+      },
+      "id": "call-crewai",
+      "name": "Call CrewAI Validate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [520, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.MEMORY_SERVICE_URL || 'http://memory-service:8090' }}/memory/validation",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"user_id\": \"mcp-client\",\n  \"chat_id\": \"mcp-client\",\n  \"file_name\": \"mcp-upload.csv\",\n  \"valid\": {{ $json.valid }},\n  \"issues\": {{ JSON.stringify($json.validation?.issues || []) }},\n  \"converted_to\": \"csv\",\n  \"message\": {{ JSON.stringify($json.message || '') }}\n}"
+      },
+      "id": "save-memory",
+      "name": "Save Memory",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [760, 300]
+    }
+  ],
+  "connections": {
+    "MCP Server Trigger": {
+      "main": [
+        [
+          {
+            "node": "Call CrewAI Validate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call CrewAI Validate": {
+      "main": [
+        [
+          {
+            "node": "Save Memory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

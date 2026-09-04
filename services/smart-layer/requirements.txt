@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+python-multipart
+pandas
+pandera
+pydantic
+instructor
+openai
+httpx

@@ -1,0 +1,67 @@
+services:
+  smart-layer:
+    build:
+      context: .
+      dockerfile: services/smart-layer/Dockerfile
+    ports:
+      - "8060:8060"
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL_NAME: ${OPENAI_MODEL_NAME:-gpt-4o-mini}
+      VAULT_DIR: /app/vault
+    volumes:
+      - ./vault:/app/vault
+    restart: unless-stopped
+
+  rule-engine:
+    build:
+      context: .
+      dockerfile: services/rule-engine/Dockerfile
+    ports:
+      - "8070:8070"
+    volumes:
+      - ./vault:/app/vault
+    restart: unless-stopped
+
+  crewai-service:
+    build:
+      context: .
+      dockerfile: services/crewai-service/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL_NAME: ${OPENAI_MODEL_NAME:-gpt-4o-mini}
+    restart: unless-stopped
+
+  memory-service:
+    build:
+      context: .
+      dockerfile: services/memory-service/Dockerfile
+    ports:
+      - "8090:8090"
+    volumes:
+      - memory_data:/app/data
+    restart: unless-stopped
+
+  quality-layer:
+    build:
+      context: .
+      dockerfile: services/quality-layer/Dockerfile
+    ports:
+      - "8050:8050"
+    environment:
+      QUALITY_DATA_DIR: /app/data
+      ARGILLA_API_URL: ${ARGILLA_API_URL:-}
+      ARGILLA_API_KEY: ${ARGILLA_API_KEY:-}
+      ARGILLA_WORKSPACE: ${ARGILLA_WORKSPACE:-crm-ai}
+      ARGILLA_DATASET: ${ARGILLA_DATASET:-correct-bucket-review}
+      SETFIT_MODEL_PATH: ${SETFIT_MODEL_PATH:-}
+    volumes:
+      - quality_data:/app/data
+      - ./evals:/app/evals:ro
+    restart: unless-stopped
+
+volumes:
+  memory_data:
+  quality_data:
