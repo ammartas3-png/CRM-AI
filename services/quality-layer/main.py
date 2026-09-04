@@ -9,7 +9,9 @@ from typing import Any
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
+from cascade import cascade_comment, cascade_enrich_lead
 from conflicts import build_conflict_report, write_report
+from noise_strip import strip_noise
 from review_queue import (
     enqueue_correct_sample,
     export_argilla_records,
@@ -18,29 +20,55 @@ from review_queue import (
     record_verdict,
 )
 from router import detect_families, enrich_lead, route_comment
+from run_checkpoint import run_checkpoint, write_checkpoint
+from schema_gate import pandera_schema_available, validate_leads
+from setfit_router import ensure_model, predict_status
 
-app = FastAPI(title="CRM Quality Layer", version="1.0.0")
+app = FastAPI(title="CRM Quality Layer", version="1.1.0")
 ROOT = Path(__file__).resolve().parents[2]
+
+UPSTREAM_REPOS = [
+    "https://github.com/aurelio-labs/semantic-router",
+    "https://github.com/argilla-io/argilla",
+    "https://github.com/snorkel-team/snorkel",
+    "https://github.com/567-labs/instructor",
+    "https://github.com/vi3k6i5/flashtext",
+    "https://github.com/rapidfuzz/RapidFuzz",
+    "https://github.com/huggingface/setfit",
+    "https://github.com/explosion/spaCy",
+    "https://github.com/unionai-oss/pandera",
+    "https://github.com/ksploitx/support-ticket-classifier",
+    "https://github.com/great-expectations/great_expectations",
+    "https://github.com/erinozolins/eval-loop",
+    "https://github.com/yablokolabs/CallLens",
+    "https://github.com/attentiontech/gtm-superintelligence",
+    "https://github.com/aiagentwithdhruv/dealpulse",
+]
 
 
 @app.get("/health")
 def health() -> dict[str, Any]:
+    ml_backend = ensure_model()
     return {
         "ok": True,
         "service": "quality-layer",
+        "version": "1.1.0",
         "features": [
             "ambiguous-router",
             "correct-bucket-review",
             "conflict-matrix",
             "argilla-export",
+            "noise-strip",
+            "schema-gate",
+            "setfit-or-sklearn-router",
+            "cascade",
+            "run-checkpoint",
         ],
-        "upstream_repos": [
-            "https://github.com/aurelio-labs/semantic-router",
-            "https://github.com/argilla-io/argilla",
-            "https://github.com/snorkel-team/snorkel",
-            "https://github.com/567-labs/instructor",
-            "https://github.com/vi3k6i5/flashtext",
-        ],
+        "backends": {
+            "ml_router": ml_backend,
+            "pandera_available": pandera_schema_available(),
+        },
+        "upstream_repos": UPSTREAM_REPOS,
     }
 
 
@@ -52,6 +80,52 @@ def quality_route(payload: dict[str, Any]) -> JSONResponse:
     return JSONResponse(route_comment(comments, family=family, min_score=min_score))
 
 
+@app.post("/quality/strip-noise")
+def quality_strip_noise(payload: dict[str, Any]) -> JSONResponse:
+    comments = str(payload.get("comments") or payload.get("last 10 comments") or "")
+    use_spacy = bool(payload.get("use_spacy", True))
+    return JSONResponse(strip_noise(comments, use_spacy=use_spacy))
+
+
+@app.post("/quality/validate-leads")
+def quality_validate_leads(payload: dict[str, Any]) -> JSONResponse:
+    leads = payload.get("leads") or payload.get("items") or []
+    if isinstance(leads, dict):
+        leads = [leads]
+    return JSONResponse(validate_leads(list(leads)))
+
+
+@app.post("/quality/predict-ml")
+def quality_predict_ml(payload: dict[str, Any]) -> JSONResponse:
+    comments = str(payload.get("comments") or payload.get("last 10 comments") or "")
+    return JSONResponse(predict_status(comments))
+
+
+@app.post("/quality/cascade")
+def quality_cascade(payload: dict[str, Any]) -> JSONResponse:
+    comments = str(payload.get("comments") or payload.get("last 10 comments") or "")
+    min_fuzzy = float(payload.get("min_fuzzy") or payload.get("min_score") or 62)
+    min_ml = float(payload.get("min_ml") or 45)
+    return JSONResponse(cascade_comment(comments, min_fuzzy=min_fuzzy, min_ml=min_ml))
+
+
+@app.post("/quality/checkpoint")
+def quality_checkpoint(payload: dict[str, Any]) -> JSONResponse:
+    leads = payload.get("leads") or payload.get("items") or []
+    if isinstance(leads, dict):
+        leads = [leads]
+    report = run_checkpoint(list(leads))
+    data_dir = Path(os.getenv("QUALITY_DATA_DIR", str(ROOT / "evals")))
+    out = data_dir / "run_checkpoint.json"
+    try:
+        write_checkpoint(report, out)
+        report["written_to"] = str(out)
+    except Exception as exc:
+        report["written_to"] = None
+        report["write_error"] = str(exc)
+    return JSONResponse(report)
+
+
 @app.post("/quality/enrich-leads")
 def enrich_leads(payload: dict[str, Any]) -> JSONResponse:
     leads = payload.get("leads") or payload.get("items") or []
@@ -59,27 +133,49 @@ def enrich_leads(payload: dict[str, Any]) -> JSONResponse:
         leads = [leads]
     min_score = float(payload.get("min_score") or 62)
     only_ambiguous = bool(payload.get("only_ambiguous", True))
+    use_cascade = bool(payload.get("use_cascade", False))
+    strip_first = bool(payload.get("strip_noise", True))
     out: list[dict[str, Any]] = []
     applied = 0
     for lead in leads:
         comments = str(lead.get("last 10 comments") or lead.get("comments") or "")
+        work = dict(lead)
+        if strip_first and comments:
+            cleaned = strip_noise(comments)["cleaned"]
+            if cleaned != comments:
+                work["_comments_raw"] = comments
+                work["last 10 comments"] = cleaned
+                comments = cleaned
         fams = detect_families(comments)
-        vr = str(lead.get("Validation Result") or "").lower()
-        conf = str(lead.get("Confidence") or "").lower()
+        vr = str(work.get("Validation Result") or "").lower()
+        conf = str(work.get("Confidence") or "").lower()
         needs = (
             vr in {"manual check", "manual", "wrong"}
             or conf == "low"
-            or bool(lead.get("_needs_bot_qa"))
+            or bool(work.get("_needs_bot_qa"))
             or bool(fams)
         )
         if only_ambiguous and not needs:
-            out.append(lead)
+            out.append(work)
             continue
-        enriched = enrich_lead(lead, min_score=min_score)
-        if enriched.get("_quality_router_applied"):
-            applied += 1
+        if use_cascade:
+            enriched = cascade_enrich_lead(work, min_fuzzy=min_score)
+            if enriched.get("_quality_cascade_applied"):
+                applied += 1
+        else:
+            enriched = enrich_lead(work, min_score=min_score)
+            if enriched.get("_quality_router_applied"):
+                applied += 1
         out.append(enriched)
-    return JSONResponse({"ok": True, "count": len(out), "applied": applied, "leads": out})
+    return JSONResponse(
+        {
+            "ok": True,
+            "count": len(out),
+            "applied": applied,
+            "mode": "cascade" if use_cascade else "fuzzy-router",
+            "leads": out,
+        }
+    )
 
 
 @app.post("/quality/review/enqueue-correct")

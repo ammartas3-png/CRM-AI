@@ -56,6 +56,7 @@ services:
       ARGILLA_API_KEY: ${ARGILLA_API_KEY:-}
       ARGILLA_WORKSPACE: ${ARGILLA_WORKSPACE:-crm-ai}
       ARGILLA_DATASET: ${ARGILLA_DATASET:-correct-bucket-review}
+      SETFIT_MODEL_PATH: ${SETFIT_MODEL_PATH:-}
     volumes:
       - quality_data:/app/data
       - ./evals:/app/evals:ro

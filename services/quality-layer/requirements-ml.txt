@@ -1,0 +1,7 @@
+# Optional heavy ML / schema backends for quality-layer.
+# Core CI uses requirements.txt (sklearn TF-IDF fallback).
+# Install when SETFIT_MODEL_PATH / spaCy PhraseMatcher / Pandera are desired:
+setfit
+spacy
+pandera[pandas]
+torch
