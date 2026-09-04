@@ -44,5 +44,23 @@ services:
       - memory_data:/app/data
     restart: unless-stopped
 
+  quality-layer:
+    build:
+      context: .
+      dockerfile: services/quality-layer/Dockerfile
+    ports:
+      - "8050:8050"
+    environment:
+      QUALITY_DATA_DIR: /app/data
+      ARGILLA_API_URL: ${ARGILLA_API_URL:-}
+      ARGILLA_API_KEY: ${ARGILLA_API_KEY:-}
+      ARGILLA_WORKSPACE: ${ARGILLA_WORKSPACE:-crm-ai}
+      ARGILLA_DATASET: ${ARGILLA_DATASET:-correct-bucket-review}
+    volumes:
+      - quality_data:/app/data
+      - ./evals:/app/evals:ro
+    restart: unless-stopped
+
 volumes:
   memory_data:
+  quality_data:
