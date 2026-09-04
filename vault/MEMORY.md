@@ -20,6 +20,9 @@ Operating manual: [`docs/RULE-CHANGE.md`](../docs/RULE-CHANGE.md)
 - [`bare-status-comment`](rules/bare-status-comment.md)
 - [`no-interest-needs-two-days`](rules/no-interest-needs-two-days.md)
 - [`keep-decided-crm-status`](rules/keep-decided-crm-status.md)
+- [`call-again-vs-recall-vs-np`](rules/call-again-vs-recall-vs-np.md) — money/callback/refusal decision tree
+
+Prompt ↔ Sheet alignment notes: [`docs/PROMPT-SHEET-SEMANTIC-ALIGNMENT.md`](../docs/PROMPT-SHEET-SEMANTIC-ALIGNMENT.md)
 
 ## Schema / normalize helpers
 
