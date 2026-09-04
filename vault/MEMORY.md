@@ -41,3 +41,5 @@ Operating manual: [`docs/RULE-CHANGE.md`](../docs/RULE-CHANGE.md)
 1. Zero-token rules (`crm_classify` / Memory Match) — `token_cost: 0`
 2. Only unresolved rows → small AI
 3. Never treat CrewAI or semantic cache as the primary classifier
+
+- [`call-again-vs-recall-vs-np.md`](rules/call-again-vs-recall-vs-np.md) — Call Again vs Recall vs No Potential priority tree

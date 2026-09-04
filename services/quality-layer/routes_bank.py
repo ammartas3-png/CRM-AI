@@ -28,6 +28,11 @@ ROUTE_BANK: dict[str, dict] = {
             "almost no money no savings barely makes ends meet",
             "dont have money cancel it was a mistake",
             "not serious didnt mean to invest no money",
+            "cant afford + by October",
+            "no starting capital + reply when ready",
+            "no capital + discontinue",
+            "months to save salary under 20k",
+            "cannot afford + in 4 months",
         ],
     },
     "agent_redial_not_callback": {

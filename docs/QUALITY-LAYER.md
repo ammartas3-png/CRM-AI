@@ -34,14 +34,16 @@ bash scripts/fetch_quality_repos.sh
 - `POST /quality/review/verdict` — `{ "id", "human_status", "note" }`
 - `POST /quality/conflicts/report`
 
-## n8n (optional small branch — not required for Memory Match)
+## n8n (wired in V2)
 
-1. After **Memory Match**, add Code node with `n8n-import/snippets/quality-layer-select-ambiguous.js`
-2. HTTP Request → `POST {{$env.QUALITY_LAYER_URL}}/quality/enrich-leads`
-3. Code node with `n8n-import/snippets/quality-layer-merge-enriched.js`
-4. Continue to existing report path
+Live V2 has **Quality Layer Enrich** between Memory Match and Rule Hit Tracker
+(`n8n-import/snippets/quality-layer-inline-enrich.js`).
 
-If `QUALITY_LAYER_URL` is unset, skip the branch; live Telegram path stays as today.
+- Reads `$env.QUALITY_LAYER_URL`
+- POSTs only ambiguous leads to `/quality/enrich-leads`
+- Merges Suggested Status back; no-ops when URL unset or service down
+
+Legacy two-node snippets (`quality-layer-select-ambiguous.js` + merge) remain as reference.
 
 ## Argilla (optional)
 
@@ -55,3 +57,16 @@ ARGILLA_DATASET=correct-bucket-review
 ```
 
 Without a server, exports land in `data/review_queue/argilla_export_*.json` for manual UI import.
+
+## Correct-bucket HITL (routine)
+
+After every large Excel / Telegram validation run:
+
+```bash
+python3 scripts/quality_tools.py hitl-routine --input path/to/leads.json --limit 30
+python3 scripts/quality_tools.py pending
+python3 scripts/quality_tools.py conflicts
+```
+
+Goal: catch **Correct but actually Wrong** leaks. Promote confirmed flips into `vault/rules`, `evals/golden_leads.jsonl`, and Memory Match.
+

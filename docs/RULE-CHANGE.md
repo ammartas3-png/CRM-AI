@@ -100,3 +100,13 @@ After each run summary, V2 may send up to **12** uncertain leads as normal Teleg
 - Votes append to Google Sheet `Decision_Memory` as `type=human_survey` (best-effort)
 
 Reports still send as usual; the survey does not block XLSX files.
+
+## After a large run (Correct-bucket HITL)
+
+Do not only triage Wrong rows. Also sample Correct:
+
+```bash
+python3 scripts/quality_tools.py hitl-routine --input leads.json --limit 30
+```
+
+See [`QUALITY-LAYER.md`](QUALITY-LAYER.md). Top conflict families to watch: Call Again↔Recall, Call Again↔No Potential.

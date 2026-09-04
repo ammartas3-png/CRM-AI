@@ -181,6 +181,8 @@ AGENT_DIAL_RE = re.compile(
     r"\b((cb|cbk|clbk|cback|callback|call again|called back)\s*[:\-]?\s*"
     r"(vm|voice\s*mail|voicemail|na|ndt|db|no answer|rej|rejected|busy|pu ?hu|hu|hung)(\s*[x*]\s*\d+)?|"
     r"cb\s*(na|ndt|db)(\s*[x*]\s*\d+)?|"
+    r"cb\s+and\s+(she|he|they|client)?\s*(rej|rejected|na|no answer|hu|hung)|"
+    r"call again\s+and\s+(no answer|na|rej|rejected)|"
     r"i (said|told)[^.;]{0,40}?(i (would|will) )?(hang up|hung up)( and (i )?(would |will )?call(ed)? (back|again))?|"
     r"i (would|will) (hang up|call back|call again)|"
     r"i (tried|trying|attempted) to (cb|cbk|call back|callback|call again)|"
@@ -204,7 +206,7 @@ def has_callback(text: str) -> bool:
     if CALLBACK_FALSE_RE.search(t) and not CONCRETE_TIME_RE.search(t):
         return False
     return True
-MONEY_RE = re.compile(r"\b(no money|dont have money|do not have money|no funds|cannot afford|cant afford|no income)\b", re.I)
+MONEY_RE = re.compile(r"\b(no money|dont have money|do not have money|no funds|cannot afford|cant afford|no income|no capital|no savings|barely (makes? ends meet|surviving)|cant afford|cannot afford)\b", re.I)
 # A money block that comes with a concrete near-term plan to get the money is still workable.
 FUNDING_PLAN_RE = re.compile(
     r"\b(get (my |his |her )?salary|until (the )?salary|after (the )?salary|salary (time|day|date|comes)|"
@@ -217,10 +219,12 @@ FUNDING_PLAN_RE = re.compile(
 )
 # The same money block with no route back stays No Potential.
 FUNDING_DEAD_RE = re.compile(
-    r"\b(not sure when|dont know when|do not know when|no idea when|not (very )?serious|"
-    r"didnt mean to invest|no job|jobless|unemployed|months? to save|save up|saving up|"
+    r"\b(not sure when|dont know when|do not know when|no idea when|cant say when|not (very )?serious|"
+    r"didnt mean to invest|did not mean to invest|cancel (it )?(was|as) a mistake|it was a mistake|"
+    r"no job|jobless|unemployed|months? to save|save up|saving up|no savings|barely (makes? ends meet|surviving)|"
     r"in \d+ ?months?|after \d+ ?months?|"
-    r"by (january|february|march|april|may|june|july|august|september|october|november|december))\b",
+    r"by (january|february|march|april|may|june|july|august|september|october|november|december)|"
+    r"reply when (i am |im |he is |she is )?ready)\b",
     re.I,
 )
 WRONG_NUM_RE = re.compile(
@@ -342,6 +346,20 @@ def classify_lead(lead: dict[str, Any]) -> ClassifyResult:
     if MONEY_RE.search(full) and has_callback(full):
         if has_callback(newest_norm) or has_callback(full):
             return done("Call Again", "rule-engine:money_plus_callback", "no money + concrete callback => Call Again (callback wins)")
+
+    # 5a2) money + quit language without funding plan → No Potential (beats single-day Recall).
+    quit_re = re.compile(
+        r"\b(discontinue|cancel it|not be proceeding|would not be proceeding|"
+        r"doesnt want to proceed|dont want to proceed)\b",
+        re.I,
+    )
+    if MONEY_RE.search(full) and quit_re.search(full) and not FUNDING_PLAN_RE.search(full):
+        return done(
+            "No Potential",
+            "rule-engine:money_quit",
+            "money block + discontinue/cancel without funding plan => No Potential",
+            detail="money+quit",
+        )
 
     # 5b) no money but a concrete funding plan (salary, arrange funds, ask friends) and no
     # dead-end signal → the lead is only blocked on timing, keep dialing.
