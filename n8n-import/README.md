@@ -6,6 +6,12 @@ n8n Cloud uzerinde su an aktif:
 1. `Telegram Front Door -> V2 Database-check` — `/start`, dosya alir, `chat_id` + file'i V2 webhook'a multipart POST eder
 2. `Telegram Database Validator Bot V2` (smart upgraded) — dinamik `chat_id`, sheet governance, Manual Entry closed-loop, agent score
 
+### Belirsiz lead akisi (istenen)
+
+`Memory Match` eslesmezse → **AI Agent** karar onerir → Telegram'da **Accept AI** / baska status → cevap **Google Sheets `Decision_Memory`** satiri olarak yazilir (Front Door + V2 Append Survey Confirm).
+
+Snapshot dosyalarini n8n'e yeniden import etmeden canliya yansımaz.
+
 ## Snapshot dosyalari
 
 - `06-Front-Door-Telegram.workflow.json` — Front Door (chat_id forward dahil)

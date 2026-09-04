@@ -14,6 +14,16 @@ Live n8n workflow `Telegram Database Validator Bot V2` now includes:
 10. Decision Memory Logger + Google Sheets `Decision_Memory` append
 11. Rule Hit Tracker in workflow staticData
 12. Slim main Excel report (34 → 16 columns): drops internal/AI-debug fields; adds **Match Detail**
+13. **Ambiguous leads → AI Agent → Telegram confirm → Google Sheets** (Accept AI / override)
+
+### Ambiguous lead loop (AI + Telegram + Sheets)
+
+1. Memory Match does not decide (`skipAI=false`)
+2. `If` false branch → **Build AI Batches → AI Agent → Split AI Results**
+3. AI writes `Suggested Status` + `_needs_bot_qa` (still `Validation Result=Manual Check` until human confirms)
+4. After reports/summary, Telegram asks one-by-one with **Accept AI** + status buttons
+5. Front Door vote (`v|<account>|ok` or other codes) → Append Human Vote (Sheets) → V2 Survey Vote Handler
+6. V2 resolves Accept AI to the AI proposal, appends **Append Survey Confirm** to `Decision_Memory`, then next question / Manual Entry file
 
 ### Main report columns (kept)
 

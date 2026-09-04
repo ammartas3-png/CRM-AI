@@ -608,7 +608,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Cheap AI batches: only ambiguous leads, short comments, small batches.\nconst rows = $input.all().map(i => i.json);\nconst BATCH = 15;\nconst out = [];\nfor (let i = 0; i < rows.length; i += BATCH) {\n  const slice = rows.slice(i, i + BATCH).map(r => ({\n    \"account no\": String(r[\"account no\"] || \"\"),\n    \"brand\": String(r.brand || \"\").slice(0, 40),\n    \"customer status\": String(r[\"customer status\"] || \"\").slice(0, 60),\n    \"country\": String(r.country || \"\").slice(0, 40),\n    \"Agent\": String(r.Agent || \"\").slice(0, 40),\n    \"last 10 comments\": String(r[\"last 10 comments\"] || \"\").slice(0, 800)\n  }));\n  out.push({ json: { batch: slice, batch_index: out.length, count: slice.length } });\n}\nif (out.length === 0) out.push({ json: { batch: [], batch_index: 0, count: 0 } });\nreturn out;\n"
+        "jsCode": "// Cheap AI batches: only ambiguous leads, short comments, small batches.\nconst rows = $input.all().map(i => i.json);\nconst BATCH = 15;\nconst out = [];\nfor (let i = 0; i < rows.length; i += BATCH) {\n  const slice = rows.slice(i, i + BATCH).map(r => ({\n    \"account no\": String(r[\"account no\"] || \"\"),\n    \"brand\": String(r.brand || \"\").slice(0, 40),\n    \"customer status\": String(r[\"customer status\"] || r[\"customer status\"] || \"\").slice(0, 60),\n    \"country\": String(r.country || \"\").slice(0, 40),\n    \"Agent\": String(r.Agent || \"\").slice(0, 40),\n    \"last 10 comments\": String(r[\"last 10 comments\"] || \"\").slice(0, 800)\n  }));\n  out.push({ json: { batch: slice, batch_index: out.length, count: slice.length } });\n}\nif (out.length === 0) out.push({ json: { batch: [], batch_index: 0, count: 0 } });\nreturn out;\n"
       },
       "id": "build-ai-batches-001",
       "name": "Build AI Batches",
@@ -621,7 +621,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Structured JSON repair (Instructor-like) + map batch outputs back to leads.\nfunction extractJSON(text) {\n  const t = String(text || \"\").trim();\n  if (!t) return null;\n  try { return JSON.parse(t); } catch (e) {}\n  const fence = t.match(/```(?:json)?\\s*([\\s\\S]*?)```/i);\n  if (fence) { try { return JSON.parse(fence[1]); } catch (e) {} }\n  const arr = t.match(/\\[[\\s\\S]*\\]/);\n  if (arr) { try { return JSON.parse(arr[0]); } catch (e) {} }\n  const obj = t.match(/\\{[\\s\\S]*\\}/);\n  if (obj) { try { return JSON.parse(obj[0]); } catch (e) {} }\n  // trailing comma repair\n  const cleaned = t.replace(/,\\s*([}\\]])/g, '$1');\n  try { return JSON.parse(cleaned); } catch (e) {}\n  if (arr) { try { return JSON.parse(arr[0].replace(/,\\s*([}\\]])/g, '$1')); } catch (e) {} }\n  return null;\n}\n\nfunction asArray(parsed) {\n  if (!parsed) return [];\n  if (Array.isArray(parsed)) return parsed;\n  if (Array.isArray(parsed.results)) return parsed.results;\n  if (Array.isArray(parsed.leads)) return parsed.leads;\n  if (parsed[\"account no\"] != null) return [parsed];\n  return [];\n}\n\nconst res = {};\nfor (const it of $input.all()) {\n  const arr = asArray(extractJSON(it.json.output));\n  for (const o of arr) {\n    if (o && o[\"account no\"] != null) res[String(o[\"account no\"])] = o;\n  }\n}\nconst leads = $('If').all(1);\nreturn leads.map(item => {\n  const lead = item.json;\n  const acc = String(lead[\"account no\"] || \"\");\n  let o = res[acc];\n  if (!o) {\n    o = {\n      \"account no\": acc,\n      \"Validation Result\": \"Manual Check\",\n      \"Suggested Status\": lead[\"customer status\"] || \"\",\n      \"Reason\": \"AI batch returned no valid JSON row - manual review.\"\n    };\n  }\n  return { json: { ...lead, output: JSON.stringify(o), _json_repaired: true } };\n});\n"
+        "jsCode": "// Structured JSON repair + map batch outputs back to leads.\n// AI proposes Suggested Status; Telegram must confirm before Sheets learning / Manual Entry.\nfunction extractJSON(text) {\n  const t = String(text || \"\").trim();\n  if (!t) return null;\n  try { return JSON.parse(t); } catch (e) {}\n  const fence = t.match(/```(?:json)?\\s*([\\s\\S]*?)```/i);\n  if (fence) { try { return JSON.parse(fence[1]); } catch (e) {} }\n  const arr = t.match(/\\[[\\s\\S]*\\]/);\n  if (arr) { try { return JSON.parse(arr[0]); } catch (e) {} }\n  const obj = t.match(/\\{[\\s\\S]*\\}/);\n  if (obj) { try { return JSON.parse(obj[0]); } catch (e) {} }\n  const cleaned = t.replace(/,\\s*([}\\]])/g, '$1');\n  try { return JSON.parse(cleaned); } catch (e) {}\n  if (arr) { try { return JSON.parse(arr[0].replace(/,\\s*([}\\]])/g, '$1')); } catch (e) {} }\n  return null;\n}\n\nfunction asArray(parsed) {\n  if (!parsed) return [];\n  if (Array.isArray(parsed)) return parsed;\n  if (Array.isArray(parsed.results)) return parsed.results;\n  if (Array.isArray(parsed.leads)) return parsed.leads;\n  if (parsed[\"account no\"] != null) return [parsed];\n  return [];\n}\n\nfunction pickStatus(o) {\n  return String(\n    o[\"Suggested Status\"] || o.suggested_status || o.status || \"\"\n  ).trim();\n}\n\nconst res = {};\nfor (const it of $input.all()) {\n  const arr = asArray(extractJSON(it.json.output));\n  for (const o of arr) {\n    if (o && o[\"account no\"] != null) res[String(o[\"account no\"])] = o;\n  }\n}\nconst leads = $('If').all(1);\nreturn leads.map(item => {\n  const lead = item.json;\n  const acc = String(lead[\"account no\"] || \"\");\n  let o = res[acc];\n  if (!o) {\n    o = {\n      \"account no\": acc,\n      \"Validation Result\": \"Manual Check\",\n      \"Suggested Status\": lead[\"customer status\"] || \"\",\n      \"Reason\": \"AI batch returned no valid JSON row — confirm on Telegram.\"\n    };\n  }\n  const aiStatus = pickStatus(o) || String(lead[\"customer status\"] || \"\").trim();\n  const reason = String(o.Reason || o.reason || \"AI Agent proposal\").slice(0, 240);\n  return {\n    json: {\n      ...lead,\n      output: JSON.stringify({ ...o, \"Suggested Status\": aiStatus }),\n      _json_repaired: true,\n      _needs_bot_qa: true,\n      _ai_proposal: aiStatus,\n      skipAI: false,\n      \"Suggested Status\": aiStatus,\n      \"Validation Result\": \"Manual Check\",\n      \"Decision Source\": \"AI Agent (awaiting Telegram confirm)\",\n      \"Reason\": reason,\n      Confidence: \"Low\",\n      \"Review Priority\": \"High\"\n    }\n  };\n});\n"
       },
       "id": "split-ai-results-001",
       "name": "Split AI Results",
@@ -1161,7 +1161,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const rows = $input.all().map(i => i.json);\nconst sd = $getWorkflowStaticData('global');\nconst chatId = String(sd.telegramChatId || rows[0]?.chat_id || rows[0]?._telegram_chat_id || '').trim();\nconst total = rows.length;\nconst correct = rows.filter(r => String(r['Validation Result']||'').toLowerCase()==='correct').length;\nconst wrong = rows.filter(r => String(r['Validation Result']||'').toLowerCase()==='wrong').length;\nconst manual = rows.filter(r => /manual/i.test(String(r['Validation Result']||''))).length;\nconst high = rows.filter(r => r.Confidence==='High').length;\nconst low = rows.filter(r => r.Confidence==='Low').length;\nconst inj = rows.filter(r => r['Injection Flag']==='Yes').length;\nconst auto = rows.filter(r => r['Auto Accept']==='Yes').length;\nconst part = rows[0]?._chunk_part ? ` (chunk ${rows[0]._chunk_part}/${rows[0]._chunk_total||'?'})` : '';\n\nconst byAgent = {};\nfor (const r of rows) {\n  const a = String(r.Agent || r.agent || 'Unknown').trim() || 'Unknown';\n  if (!byAgent[a]) byAgent[a] = { total: 0, correct: 0, wrong: 0, manual: 0 };\n  byAgent[a].total++;\n  const v = String(r['Validation Result'] || '').toLowerCase();\n  if (v === 'correct') byAgent[a].correct++;\n  else if (v === 'wrong') byAgent[a].wrong++;\n  else if (/manual/.test(v)) byAgent[a].manual++;\n}\nconst agentLines = Object.entries(byAgent)\n  .sort((a, b) => (b[1].wrong - a[1].wrong) || (b[1].total - a[1].total))\n  .slice(0, 12)\n  .map(([a, s]) => {\n    const score = s.total ? Math.round(100 * s.correct / s.total) : 0;\n    return `${a}: ${score}% (${s.correct}/${s.total} ok, ${s.wrong} wrong)`;\n  })\n  .join('\\n');\n\n// Bot Q&A: ambiguous leads asked ONE-BY-ONE on Telegram; answers → Manual Entry file.\nconst MAX_SURVEY = 40;\nfunction isUncertain(r) {\n  if (r._needs_bot_qa === true || r._needs_bot_qa === 'true') return true;\n  const conf = String(r.Confidence || '');\n  const vr = String(r['Validation Result'] || '');\n  if (conf === 'Low') return true;\n  if (/manual/i.test(vr)) return true;\n  return false;\n}\nconst uncertain = rows.filter(isUncertain)\n  .sort((a, b) => {\n    const qa = (a._needs_bot_qa === true || a._needs_bot_qa === 'true') ? 0 : 1;\n    const qb = (b._needs_bot_qa === true || b._needs_bot_qa === 'true') ? 0 : 1;\n    return qa - qb;\n  })\n  .slice(0, MAX_SURVEY)\n  .map(r => ({\n    account: String(r['account no'] || '').trim(),\n    crm: String(r['customer status'] || '').trim(),\n    suggested: String(r['Suggested Status'] || '').trim(),\n    validation: String(r['Validation Result'] || '').trim(),\n    confidence: String(r.Confidence || ''),\n    reason: String(r.Reason || r['Confidence Reason'] || '').slice(0, 160),\n    comments: String(r['last 10 comments'] || '').replace(/\\s+/g, ' ').slice(0, 220),\n    agent: String(r.Agent || '').trim(),\n    brand: String(r.brand || '').trim(),\n    country: String(r.country || '').trim(),\n    office: String(r['Current Agent Office'] || '').trim()\n  }))\n  .filter(x => x.account);\n\nsd.pendingSurvey = uncertain;\nsd.surveyAnswers = [];\nsd.surveyChatId = chatId;\n\n// Engine-certain status changes (for later Manual Entry merge after Q&A)\nfunction statusCanon(s) {\n  const x = String(s || '').trim().toLowerCase().replace(/\\s+/g, ' ');\n  if (/no answer/.test(x) && /5/.test(x)) return 'no answer 5 up';\n  if (/no answer/.test(x)) return 'no answer 1-5';\n  if (/no potential/.test(x)) return 'no potential';\n  return x;\n}\nsd.engineManualCandidates = rows\n  .filter(r => !(r._needs_bot_qa === true || r._needs_bot_qa === 'true'))\n  .filter(r => {\n    const crm = String(r['customer status'] || '').trim();\n    const sug = String(r['Suggested Status'] || '').trim();\n    if (!sug) return false;\n    if (statusCanon(crm) && statusCanon(crm) === statusCanon(sug)) return false;\n    return crm.toLowerCase() !== sug.toLowerCase();\n  })\n  .map(r => ({\n    brand: r.brand || '',\n    'account no': r['account no'] || '',\n    'last 10 comments': String(r['last 10 comments'] || '').slice(0, 450),\n    'customer status': r['Suggested Status'] || '',\n    country: r.country || '',\n    Agent: r.Agent || '',\n    'Current Agent Office': r['Current Agent Office'] || '',\n    'Old Status (CRM)': r['customer status'] || '',\n    Reason: r.Reason || '',\n    'Decision Source': r['Decision Source'] || '',\n    'Match Detail': '',\n    'Applied to CRM': '',\n    'Applied At': '',\n    'Applied By': '',\n    'Review Notes': ''\n  }));\n\n\nconst surveyLine = uncertain.length\n  ? `\\nBot Q&A: ${uncertain.length} uncertain lead(s) — answer ONE status button at a time; Manual Entry file is sent when finished.`\n  : '\\nBot Q&A: none (no ambiguous leads in this batch).';\n\nconst text =\n`Database check summary${part}\nTotal: ${total}\nCorrect: ${correct}\nWrong: ${wrong}\nManual: ${manual}\nHigh confidence: ${high}\nLow confidence: ${low}\nAuto-accept: ${auto}\nInjection flags: ${inj}\n` + (agentLines ? `\\nAgent score:\\n${agentLines}\\n` : '') +\nsurveyLine +\n`\\nReports (XLSX) will follow.`;\nreturn [{ json: { chat_id: chatId, summary_text: text, _rows_passthrough: true, _survey_count: uncertain.length } }];\n"
+        "jsCode": "const rows = $input.all().map(i => i.json);\nconst sd = $getWorkflowStaticData('global');\nconst chatId = String(sd.telegramChatId || rows[0]?.chat_id || rows[0]?._telegram_chat_id || '').trim();\nconst total = rows.length;\nconst correct = rows.filter(r => String(r['Validation Result']||'').toLowerCase()==='correct').length;\nconst wrong = rows.filter(r => String(r['Validation Result']||'').toLowerCase()==='wrong').length;\nconst manual = rows.filter(r => /manual/i.test(String(r['Validation Result']||''))).length;\nconst high = rows.filter(r => r.Confidence==='High').length;\nconst low = rows.filter(r => r.Confidence==='Low').length;\nconst inj = rows.filter(r => r['Injection Flag']==='Yes').length;\nconst auto = rows.filter(r => r['Auto Accept']==='Yes').length;\nconst part = rows[0]?._chunk_part ? ` (chunk ${rows[0]._chunk_part}/${rows[0]._chunk_total||'?'})` : '';\n\nconst byAgent = {};\nfor (const r of rows) {\n  const a = String(r.Agent || r.agent || 'Unknown').trim() || 'Unknown';\n  if (!byAgent[a]) byAgent[a] = { total: 0, correct: 0, wrong: 0, manual: 0 };\n  byAgent[a].total++;\n  const v = String(r['Validation Result'] || '').toLowerCase();\n  if (v === 'correct') byAgent[a].correct++;\n  else if (v === 'wrong') byAgent[a].wrong++;\n  else if (/manual/.test(v)) byAgent[a].manual++;\n}\nconst agentLines = Object.entries(byAgent)\n  .sort((a, b) => (b[1].wrong - a[1].wrong) || (b[1].total - a[1].total))\n  .slice(0, 12)\n  .map(([a, s]) => {\n    const score = s.total ? Math.round(100 * s.correct / s.total) : 0;\n    return `${a}: ${score}% (${s.correct}/${s.total} ok, ${s.wrong} wrong)`;\n  })\n  .join('\\n');\n\n// Bot Q&A: ambiguous leads asked ONE-BY-ONE on Telegram; answers → Manual Entry file.\nconst MAX_SURVEY = 40;\nfunction isUncertain(r) {\n  if (r._needs_bot_qa === true || r._needs_bot_qa === 'true') return true;\n  const conf = String(r.Confidence || '');\n  const vr = String(r['Validation Result'] || '');\n  if (conf === 'Low') return true;\n  if (/manual/i.test(vr)) return true;\n  return false;\n}\nconst uncertain = rows.filter(isUncertain)\n  .sort((a, b) => {\n    const qa = (a._needs_bot_qa === true || a._needs_bot_qa === 'true') ? 0 : 1;\n    const qb = (b._needs_bot_qa === true || b._needs_bot_qa === 'true') ? 0 : 1;\n    return qa - qb;\n  })\n  .slice(0, MAX_SURVEY)\n  .map(r => ({\n    account: String(r['account no'] || '').trim(),\n    crm: String(r['customer status'] || '').trim(),\n    suggested: String(r._ai_proposal || r['Suggested Status'] || '').trim(),\n    ai_proposal: String(r._ai_proposal || r['Suggested Status'] || '').trim(),\n    validation: String(r['Validation Result'] || '').trim(),\n    confidence: String(r.Confidence || ''),\n    reason: String(r.Reason || r['Confidence Reason'] || '').slice(0, 160),\n    comments: String(r['last 10 comments'] || '').replace(/\\s+/g, ' ').slice(0, 220),\n    agent: String(r.Agent || '').trim(),\n    brand: String(r.brand || '').trim(),\n    country: String(r.country || '').trim(),\n    office: String(r['Current Agent Office'] || '').trim(),\n  }))\n  .filter(x => x.account);\n\nsd.pendingSurvey = uncertain;\nsd.surveyAnswers = [];\nsd.surveyChatId = chatId;\n\n// Engine-certain status changes (for later Manual Entry merge after Q&A)\nfunction statusCanon(s) {\n  const x = String(s || '').trim().toLowerCase().replace(/\\s+/g, ' ');\n  if (/no answer/.test(x) && /5/.test(x)) return 'no answer 5 up';\n  if (/no answer/.test(x)) return 'no answer 1-5';\n  if (/no potential/.test(x)) return 'no potential';\n  return x;\n}\nsd.engineManualCandidates = rows\n  .filter(r => !(r._needs_bot_qa === true || r._needs_bot_qa === 'true'))\n  .filter(r => {\n    const crm = String(r['customer status'] || '').trim();\n    const sug = String(r['Suggested Status'] || '').trim();\n    if (!sug) return false;\n    if (statusCanon(crm) && statusCanon(crm) === statusCanon(sug)) return false;\n    return crm.toLowerCase() !== sug.toLowerCase();\n  })\n  .map(r => ({\n    brand: r.brand || '',\n    'account no': r['account no'] || '',\n    'last 10 comments': String(r['last 10 comments'] || '').slice(0, 450),\n    'customer status': r['Suggested Status'] || '',\n    country: r.country || '',\n    Agent: r.Agent || '',\n    'Current Agent Office': r['Current Agent Office'] || '',\n    'Old Status (CRM)': r['customer status'] || '',\n    Reason: r.Reason || '',\n    'Decision Source': r['Decision Source'] || '',\n    'Match Detail': '',\n    'Applied to CRM': '',\n    'Applied At': '',\n    'Applied By': '',\n    'Review Notes': ''\n  }));\n\n\nconst surveyLine = uncertain.length\n  ? `\\nBot Q&A: ${uncertain.length} uncertain lead(s) — answer ONE status button at a time; Manual Entry file is sent when finished.`\n  : '\\nBot Q&A: none (no ambiguous leads in this batch).';\n\nconst text =\n`Database check summary${part}\nTotal: ${total}\nCorrect: ${correct}\nWrong: ${wrong}\nManual: ${manual}\nHigh confidence: ${high}\nLow confidence: ${low}\nAuto-accept: ${auto}\nInjection flags: ${inj}\n` + (agentLines ? `\\nAgent score:\\n${agentLines}\\n` : '') +\nsurveyLine +\n`\\nReports (XLSX) will follow.`;\nreturn [{ json: { chat_id: chatId, summary_text: text, _rows_passthrough: true, _survey_count: uncertain.length } }];"
       },
       "id": "summary-builder",
       "name": "Build Summary Message",
@@ -1262,7 +1262,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Send ONLY the first pending uncertain lead (one-by-one Q&A).\nconst sd = $getWorkflowStaticData('global');\nconst chatId = String(\n  $('Input Router').first().json.chat_id ||\n  $('Input Router').first().json._telegram_chat_id ||\n  sd.surveyChatId ||\n  sd.telegramChatId ||\n  $input.first().json.chat_id ||\n  ''\n).trim();\nconst queue = Array.isArray(sd.pendingSurvey) ? sd.pendingSurvey : [];\nif (!queue.length) {\n  return [{ json: { chat_id: chatId, skip_survey: true, survey_text: 'No survey questions.' } }];\n}\n\nconst total = queue.length;\nconst q = queue[0];\nconst text =\n`Uncertain lead 1/${total}\nAccount: ${q.account}\nCRM: ${q.crm || '-'}\nAgent: ${q.agent || '-'}\nWhy: ${q.reason || '-'}\nComment: ${q.comments || '-'}\n\nWhat should the status be? Tap one button (next lead comes after your answer):`;\n\nreturn [{\n  json: {\n    chat_id: chatId,\n    survey_text: text,\n    account: q.account,\n    _survey_index: 1,\n    _survey_total: total,\n    skip_survey: false\n  }\n}];\n"
+        "jsCode": "// Send ONLY the first pending uncertain lead (one-by-one Q&A).\n// AI Agent already proposed a status; Telegram confirms or overrides → Google Sheets.\nconst sd = $getWorkflowStaticData('global');\nconst chatId = String(\n  $('Input Router').first().json.chat_id ||\n  $('Input Router').first().json._telegram_chat_id ||\n  sd.surveyChatId ||\n  sd.telegramChatId ||\n  $input.first().json.chat_id ||\n  ''\n).trim();\nconst queue = Array.isArray(sd.pendingSurvey) ? sd.pendingSurvey : [];\nif (!queue.length) {\n  return [{ json: { chat_id: chatId, skip_survey: true, survey_text: 'No survey questions.' } }];\n}\n\nconst total = queue.length;\nconst q = queue[0];\nconst ai = String(q.suggested || q.ai_proposal || '').trim();\nconst text =\n`Uncertain lead 1/${total}\nAccount: ${q.account}\nCRM: ${q.crm || '-'}\nAI suggests: ${ai || '(none)'}\nAgent: ${q.agent || '-'}\nWhy: ${q.reason || '-'}\nComment: ${q.comments || '-'}\n\nConfirm AI suggestion or pick another status:`;\n\nreturn [{\n  json: {\n    chat_id: chatId,\n    survey_text: text,\n    account: q.account,\n    ai_suggestion: ai,\n    _survey_index: 1,\n    _survey_total: total,\n    skip_survey: false\n  }\n}];\n"
       },
       "id": "build-survey-msgs",
       "name": "Build Survey Messages",
@@ -1283,6 +1283,18 @@
           "replyMarkup": "inlineKeyboard",
           "inlineKeyboard": {
             "rows": [
+              {
+                "row": {
+                  "buttons": [
+                    {
+                      "text": "✅ Accept AI",
+                      "additionalFields": {
+                        "callback_data": "={{ 'v|' + String($json.account || '').slice(0,40) + '|ok' }}"
+                      }
+                    }
+                  ]
+                }
+              },
               {
                 "row": {
                   "buttons": [
@@ -1422,7 +1434,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Ambiguous leads: do NOT call AI Agent.\n// Ask status one-by-one on Telegram; Manual Entry is built after answers.\nreturn $input.all().map(item => {\n  const j = { ...item.json };\n  const crm = String(j[\"customer status\"] || \"\").trim();\n  return {\n    json: {\n      ...j,\n      skipAI: true,\n      _needs_bot_qa: true,\n      \"Suggested Status\": crm,\n      \"Validation Result\": \"Manual Check\",\n      \"Decision Source\": \"Bot Q&A pending\",\n      \"Reason\": \"Ambiguous lead — choose status with Telegram buttons (one at a time).\",\n      \"Matched Keyword\": j[\"Matched Keyword\"] || \"\",\n      Confidence: \"Low\",\n      \"Review Priority\": \"High\",\n      memory_matched: false\n    }\n  };\n});\n"
+        "jsCode": "// LEGACY PATH (disconnected): ambiguous leads now go If(false) → Build AI Batches → AI Agent.\n// Kept for emergency bypass only. Do not re-attach unless AI Agent is down.\nreturn $input.all().map(item => {\n  const j = { ...item.json };\n  const crm = String(j[\"customer status\"] || \"\").trim();\n  return {\n    json: {\n      ...j,\n      skipAI: true,\n      _needs_bot_qa: true,\n      \"Suggested Status\": crm,\n      \"Validation Result\": \"Manual Check\",\n      \"Decision Source\": \"Bot Q&A pending (AI bypass)\",\n      \"Reason\": \"AI path bypassed — choose status with Telegram buttons.\",\n      \"Matched Keyword\": j[\"Matched Keyword\"] || \"\",\n      Confidence: \"Low\",\n      \"Review Priority\": \"High\",\n      memory_matched: false\n    }\n  };\n});\n"
       },
       "id": "7c57db19-0c19-4512-b8a7-174ae49dd61a",
       "name": "Mark Awaiting Human",
@@ -1468,7 +1480,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Apply one Telegram status vote, then either ask next lead or finish Manual Entry.\nconst sd = $getWorkflowStaticData('global');\nconst j = $input.first().json;\nconst account = String(j.account || '').trim();\nconst status = String(j.status || '').trim();\nconst code = String(j.code || '').trim();\nconst chatId = String(j.chat_id || sd.surveyChatId || sd.telegramChatId || '').trim();\nif (chatId) {\n  sd.surveyChatId = chatId;\n  sd.telegramChatId = chatId;\n}\n\nconst queue = Array.isArray(sd.pendingSurvey) ? sd.pendingSurvey.slice() : [];\nconst answers = Array.isArray(sd.surveyAnswers) ? sd.surveyAnswers.slice() : [];\n\nlet hit = null;\nconst nextQueue = [];\nfor (const q of queue) {\n  if (!hit && String(q.account || '').trim() === account) hit = q;\n  else nextQueue.push(q);\n}\n// If account not found, still accept vote against the head (safety)\nif (!hit && queue.length) {\n  hit = queue[0];\n  nextQueue.splice(0, nextQueue.length, ...queue.slice(1));\n}\n\nif (hit) {\n  answers.push({\n    ...hit,\n    human_status: status,\n    code,\n    answered_at: new Date().toISOString()\n  });\n}\nsd.surveyAnswers = answers;\nsd.pendingSurvey = nextQueue;\n\nif (nextQueue.length > 0) {\n  const q = nextQueue[0];\n  const total = nextQueue.length + answers.length;\n  const idx = answers.length + 1;\n  const text =\n`Uncertain lead ${idx}/${total}\nAccount: ${q.account}\nCRM: ${q.crm || '-'}\nAgent: ${q.agent || '-'}\nWhy: ${q.reason || '-'}\nComment: ${q.comments || '-'}\n\nWhat should the status be? Tap one button:`;\n  return [{\n    json: {\n      _survey_phase: 'next',\n      chat_id: chatId,\n      account: q.account,\n      survey_text: text,\n      skip_survey: false\n    }\n  }];\n}\n\n// Done — build manual entry rows from answers (+ engine candidates)\nconst engine = Array.isArray(sd.engineManualCandidates) ? sd.engineManualCandidates : [];\nconst seen = new Set();\nconst rows = [];\n\nfunction pushRow(r) {\n  const acc = String(r['account no'] || r.account || '').trim();\n  if (!acc || seen.has(acc)) return;\n  seen.add(acc);\n  rows.push(r);\n}\n\nfor (const a of answers) {\n  const human = String(a.human_status || '').trim();\n  if (!human || /^keep crm$/i.test(human)) continue; // no CRM change\n  pushRow({\n    brand: a.brand || '',\n    'account no': a.account || '',\n    'last 10 comments': a.comments || '',\n    'customer status': human,\n    country: a.country || '',\n    Agent: a.agent || '',\n    'Current Agent Office': a.office || '',\n    'Old Status (CRM)': a.crm || '',\n    Reason: `Human bot Q&A (${a.code || 'vote'})`,\n    'Decision Source': 'telegram_bot_qa',\n    'Match Detail': a.reason || '',\n    'Applied to CRM': '',\n    'Applied At': '',\n    'Applied By': '',\n    'Review Notes': ''\n  });\n}\nfor (const e of engine) pushRow(e);\n\nsd.pendingSurvey = [];\n// keep answers for debug; clear engine snapshot\nsd.engineManualCandidates = [];\n\nif (!rows.length) {\n  return [{\n    json: {\n      _survey_phase: 'done_empty',\n      chat_id: chatId,\n      done_text: '✅ All questions answered. No CRM status changes to put in Manual Entry (Keep CRM / no diffs).'\n    }\n  }];\n}\n\nreturn rows.map((r, i) => ({\n  json: {\n    ...r,\n    _survey_phase: 'done',\n    chat_id: chatId,\n    _qa_manual: true,\n    _qa_index: i,\n    _qa_total: rows.length,\n    done_text: `✅ All questions answered (${answers.length}). Manual Entry file with ${rows.length} row(s) follows.`\n  }\n}));\n"
+        "jsCode": "// Apply one Telegram status vote, then either ask next lead or finish Manual Entry.\n// code=ok|ai → accept AI Suggested Status from pending survey row.\nconst sd = $getWorkflowStaticData('global');\nconst j = $input.first().json;\nconst account = String(j.account || '').trim();\nlet status = String(j.status || '').trim();\nconst code = String(j.code || '').trim().toLowerCase();\nconst chatId = String(j.chat_id || sd.surveyChatId || sd.telegramChatId || '').trim();\nif (chatId) {\n  sd.surveyChatId = chatId;\n  sd.telegramChatId = chatId;\n}\n\nconst queue = Array.isArray(sd.pendingSurvey) ? sd.pendingSurvey.slice() : [];\nconst answers = Array.isArray(sd.surveyAnswers) ? sd.surveyAnswers.slice() : [];\n\nlet hit = null;\nconst nextQueue = [];\nfor (const q of queue) {\n  if (!hit && String(q.account || '').trim() === account) hit = q;\n  else nextQueue.push(q);\n}\nif (!hit && queue.length) {\n  hit = queue[0];\n  nextQueue.splice(0, nextQueue.length, ...queue.slice(1));\n}\n\nconst aiSuggested = String(hit?.suggested || hit?.ai_proposal || j.ai_suggestion || '').trim();\nif (code === 'ok' || code === 'ai' || /^accept[_ ]?ai$/i.test(status) || status === 'ACCEPT_AI') {\n  status = aiSuggested || status;\n}\nif (status === 'ACCEPT_AI') status = aiSuggested;\n\nif (hit) {\n  answers.push({\n    ...hit,\n    ai_status: aiSuggested,\n    human_status: status,\n    code,\n    ai_accepted: !!(aiSuggested && status && aiSuggested.toLowerCase() === status.toLowerCase()),\n    answered_at: new Date().toISOString()\n  });\n}\nsd.surveyAnswers = answers;\nsd.pendingSurvey = nextQueue;\n\nsd.sheetLearning = Array.isArray(sd.sheetLearning) ? sd.sheetLearning : [];\nlet lastMemory = null;\nif (hit && status && !/^keep crm$/i.test(status)) {\n  lastMemory = {\n    type: 'telegram_confirm',\n    account_no: hit.account || account,\n    old_status: hit.crm || '',\n    ai_status: aiSuggested,\n    new_status: status,\n    validation_result: 'Human Telegram Confirm',\n    decision_source: (aiSuggested && aiSuggested.toLowerCase() === status.toLowerCase())\n      ? 'ai_accepted_telegram'\n      : 'human_override_telegram',\n    matched_keyword: code,\n    confidence: 'Human',\n    reason: String(hit.reason || '').slice(0, 200),\n    example_comment: String(hit.comments || '').slice(0, 280),\n    created_at: new Date().toISOString()\n  };\n  sd.sheetLearning.push(lastMemory);\n}\n\n\nif (nextQueue.length > 0) {\n  const q = nextQueue[0];\n  const total = nextQueue.length + answers.length;\n  const idx = answers.length + 1;\n  const ai = String(q.suggested || q.ai_proposal || '').trim();\n  const text =\n`Uncertain lead ${idx}/${total}\nAccount: ${q.account}\nCRM: ${q.crm || '-'}\nAI suggests: ${ai || '(none)'}\nAgent: ${q.agent || '-'}\nWhy: ${q.reason || '-'}\nComment: ${q.comments || '-'}\n\nConfirm AI suggestion or pick another status:`;\n  return [{\n    json: {\n      _survey_phase: 'next',\n      chat_id: chatId,\n      account: q.account,\n      ai_suggestion: ai,\n      survey_text: text,\n      skip_survey: false,\n      ...(lastMemory || {})\n    }\n  }];\n}\n\nconst engine = Array.isArray(sd.engineManualCandidates) ? sd.engineManualCandidates : [];\nconst seen = new Set();\nconst rows = [];\n\nfunction pushRow(r) {\n  const acc = String(r['account no'] || r.account || '').trim();\n  if (!acc || seen.has(acc)) return;\n  seen.add(acc);\n  rows.push(r);\n}\n\nfor (const a of answers) {\n  const human = String(a.human_status || '').trim();\n  if (!human || /^keep crm$/i.test(human)) continue;\n  pushRow({\n    brand: a.brand || '',\n    'account no': a.account || '',\n    'last 10 comments': a.comments || '',\n    'customer status': human,\n    country: a.country || '',\n    Agent: a.agent || '',\n    'Current Agent Office': a.office || '',\n    'Old Status (CRM)': a.crm || '',\n    'AI Suggested Status': a.ai_status || '',\n    Reason: a.ai_accepted\n      ? `Telegram accepted AI (${a.code || 'ok'}): ${a.ai_status || human}`\n      : `Telegram override (${a.code || 'vote'}): AI=${a.ai_status || '-'} → Human=${human}`,\n    'Decision Source': a.ai_accepted ? 'ai_accepted_telegram' : 'human_override_telegram',\n    'Match Detail': a.reason || '',\n    'Applied to CRM': '',\n    'Applied At': '',\n    'Applied By': '',\n    'Review Notes': ''\n  });\n}\nfor (const e of engine) pushRow(e);\n\nsd.pendingSurvey = [];\nsd.engineManualCandidates = [];\n\nif (!rows.length) {\n  return [{\n    json: {\n      _survey_phase: 'done_empty',\n      chat_id: chatId,\n      done_text: '✅ All questions answered. No CRM status changes for Manual Entry (Keep CRM / no diffs).',\n      ...(lastMemory || {})\n    }\n  }];\n}\n\nreturn rows.map((r, i) => ({\n  json: {\n    ...r,\n    _survey_phase: 'done',\n    chat_id: chatId,\n    _qa_manual: true,\n    _qa_index: i,\n    _qa_total: rows.length,\n    done_text: `✅ All questions answered (${answers.length}). Manual Entry file with ${rows.length} row(s) follows. Confirmed answers are logged to Google Sheets Decision_Memory.`,\n    ...(i === 0 && lastMemory ? lastMemory : {})\n  }\n}));\n"
       },
       "id": "0ff6ae8f-a415-46ae-899e-d521bcfea530",
       "name": "Survey Vote Handler",
@@ -1649,6 +1661,56 @@
         -488,
         192
       ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "17m6No_sKILzLs5ZjmND0FykwkjFBLvWhiJP6NCcKq8E",
+          "mode": "list",
+          "cachedResultName": "CRM_AI_Rules",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/17m6No_sKILzLs5ZjmND0FykwkjFBLvWhiJP6NCcKq8E/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Decision_Memory",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "type": "={{ $json.type || 'telegram_confirm' }}",
+            "account_no": "={{ $json.account_no || $json.account || \"\" }}",
+            "old_status": "={{ $json.old_status || \"\" }}",
+            "new_status": "={{ $json.new_status || $json.status || $json[\"customer status\"] || \"\" }}",
+            "ai_status": "={{ $json.ai_status || $json.ai_suggestion || \"\" }}",
+            "validation_result": "={{ $json.validation_result || 'Human Telegram Confirm' }}",
+            "decision_source": "={{ $json.decision_source || \"telegram_survey\" }}",
+            "matched_keyword": "={{ $json.matched_keyword || $json.code || \"\" }}",
+            "confidence": "={{ $json.confidence || 'Human' }}",
+            "reason": "={{ $json.reason || $json.done_text || \"\" }}",
+            "example_comment": "={{ $json.example_comment || \"\" }}",
+            "created_at": "={{ $json.created_at || $now.toISO() }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "append-survey-confirm",
+      "name": "Append Survey Confirm",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -1450,
+        -616
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "onoiTia5zEmBSr7R",
+          "name": "Google Sheets account 2"
+        }
+      },
+      "onError": "continueRegularOutput"
     }
   ],
   "connections": {
@@ -1745,7 +1807,7 @@
         ],
         [
           {
-            "node": "Mark Awaiting Human",
+            "node": "Build AI Batches",
             "type": "main",
             "index": 0
           }
@@ -2287,13 +2349,7 @@
     },
     "Mark Awaiting Human": {
       "main": [
-        [
-          {
-            "node": "Merge1",
-            "type": "main",
-            "index": 1
-          }
-        ]
+        []
       ]
     },
     "Survey Action?": {
@@ -2318,7 +2374,7 @@
       "main": [
         [
           {
-            "node": "Survey Phase?",
+            "node": "Append Survey Confirm",
             "type": "main",
             "index": 0
           }
@@ -2399,6 +2455,17 @@
         [
           {
             "node": "Rule Hit Tracker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append Survey Confirm": {
+      "main": [
+        [
+          {
+            "node": "Survey Phase?",
             "type": "main",
             "index": 0
           }
