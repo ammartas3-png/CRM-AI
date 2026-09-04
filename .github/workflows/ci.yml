@@ -17,6 +17,7 @@ jobs:
         run: |
           pip install -r services/rule-engine/requirements.txt
           pip install -r services/smart-layer/requirements.txt || true
+          pip install -r services/quality-layer/requirements.txt
           pip install pytest openpyxl pandas
       - name: Rule system validate
         run: python scripts/validate_rule_system.py
