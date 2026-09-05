@@ -39,4 +39,13 @@ clone_ref https://github.com/yablokolabs/CallLens.git calllens
 clone_ref https://github.com/attentiontech/gtm-superintelligence.git gtm-superintelligence
 clone_ref https://github.com/aiagentwithdhruv/dealpulse.git dealpulse
 
+
+# P3 — gateway / eval / structured-output inspiration (adapters only; no install required)
+clone_ref https://github.com/BerriAI/litellm.git litellm
+clone_ref https://github.com/promptfoo/promptfoo.git promptfoo
+clone_ref https://github.com/langfuse/langfuse.git langfuse
+clone_ref https://github.com/dottxt-ai/outlines.git outlines
+clone_ref https://github.com/stanfordnlp/dspy.git dspy
+clone_ref https://github.com/huggingface/sentence-transformers.git sentence-transformers
+
 echo "Done. Runtime uses services/quality-layer adapters; clones are reference only under third_party/."

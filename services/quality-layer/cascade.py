@@ -10,6 +10,7 @@ from typing import Any
 
 from noise_strip import strip_noise
 from router import detect_families, fold, route_comment
+from semantic_bank import semantic_route
 from setfit_router import predict_status
 
 
@@ -29,7 +30,10 @@ def cascade_comment(comments: str, *, min_fuzzy: float = 62.0, min_ml: float = 4
             break
     fuzzy = route_comment(cleaned, family=family, min_score=min_fuzzy)
 
-    # Stage 3: SetFit / sklearn
+    # Stage 3: semantic example bank (RapidFuzz / optional ST)
+    semantic = semantic_route(cleaned, min_score=max(min_fuzzy, 70.0), family=family)
+
+    # Stage 4: SetFit / sklearn
     ml = predict_status(cleaned)
 
     decided = None
@@ -39,6 +43,10 @@ def cascade_comment(comments: str, *, min_fuzzy: float = 62.0, min_ml: float = 4
         decided = fuzzy["status"]
         stage = "fuzzy"
         score = float(fuzzy.get("score") or 0)
+    elif semantic.get("matched") and semantic.get("status"):
+        decided = semantic["status"]
+        stage = "semantic"
+        score = float(semantic.get("score") or 0)
     elif ml.get("matched") and ml.get("status") and float(ml.get("score") or 0) >= min_ml:
         decided = ml["status"]
         stage = "setfit_or_sklearn"
@@ -52,13 +60,14 @@ def cascade_comment(comments: str, *, min_fuzzy: float = 62.0, min_ml: float = 4
         "families": fams,
         "rule_hit": rule_hit,
         "fuzzy": fuzzy,
+        "semantic": semantic,
         "ml": ml,
         "status": decided,
         "stage": stage,
         "score": score,
         "needs_llm": needs_llm,
-        "pattern": "rules→fuzzy→setfit→llm-flag",
-        "inspired_by": "support-ticket-classifier hybrid cascade",
+        "pattern": "rules→fuzzy→semantic→setfit→llm-flag",
+        "inspired_by": "support-ticket-classifier + semantic-router hybrid cascade",
     }
 
 

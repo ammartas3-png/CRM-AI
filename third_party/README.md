@@ -28,3 +28,11 @@ bash scripts/fetch_quality_repos.sh
 | aiagentwithdhruv/dealpulse | Deal-status distribution inspiration (docs) |
 
 `.gitignore` excludes `third_party/*` clone contents except this README.
+
+| BerriAI/litellm | Optional multi-provider OpenAI gateway pattern (docs only) |
+| promptfoo/promptfoo | Offline prompt gantry checks (`scripts/ai_prompt_eval.js`) |
+| langfuse/langfuse | Trace/eval inspiration for AI batches |
+| dottxt-ai/outlines | Structured JSON contract (`structured_out.py`) |
+| stanfordnlp/dspy | Programmatic prompt constraints inspiration |
+| huggingface/sentence-transformers | Optional embeddings behind `semantic_bank.py` |
+

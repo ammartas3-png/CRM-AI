@@ -17,7 +17,7 @@ jobs:
         run: |
           pip install -r services/rule-engine/requirements.txt
           pip install -r services/smart-layer/requirements.txt || true
-          pip install -r services/quality-layer/requirements.txt
+          python3 -m pip install -r services/quality-layer/requirements.txt
           pip install pytest openpyxl pandas
       - name: Rule system validate
         run: python scripts/validate_rule_system.py
@@ -30,7 +30,7 @@ jobs:
           python services/tests/test_exact_cache.py
           python services/tests/test_lead_gate.py
       - name: Pytest
-        run: python -m pytest -q services/tests
+        run: python3 -m pytest -q services/tests
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -38,3 +38,11 @@ jobs:
         run: node scripts/mm_harness.js
       - name: n8n appointment guards
         run: node scripts/appt_harness.js
+      - name: AI prompt gantry eval (promptfoo-style)
+        run: node scripts/ai_prompt_eval.js
+      - name: Sheet ↔ prompt audit
+        run: python3 scripts/sheet_prompt_audit.py
+      - name: Quality-layer structured/semantic unit checks
+        run: |
+          python3 -m pip install -r services/quality-layer/requirements.txt
+          python3 -m pytest -q services/tests/test_quality_layer.py services/tests/test_quality_advance.py

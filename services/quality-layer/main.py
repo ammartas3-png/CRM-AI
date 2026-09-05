@@ -22,9 +22,11 @@ from review_queue import (
 from router import detect_families, enrich_lead, route_comment
 from run_checkpoint import run_checkpoint, write_checkpoint
 from schema_gate import pandera_schema_available, validate_leads
+from semantic_bank import semantic_route
 from setfit_router import ensure_model, predict_status
+from structured_out import validate_ai_batch, validate_verifier_batch
 
-app = FastAPI(title="CRM Quality Layer", version="1.1.0")
+app = FastAPI(title="CRM Quality Layer", version="1.2.0")
 ROOT = Path(__file__).resolve().parents[2]
 
 UPSTREAM_REPOS = [
@@ -43,6 +45,7 @@ UPSTREAM_REPOS = [
     "https://github.com/yablokolabs/CallLens",
     "https://github.com/attentiontech/gtm-superintelligence",
     "https://github.com/aiagentwithdhruv/dealpulse",
+    "https://github.com/BerriAI/litellm",
 ]
 
 
@@ -52,7 +55,7 @@ def health() -> dict[str, Any]:
     return {
         "ok": True,
         "service": "quality-layer",
-        "version": "1.1.0",
+        "version": "1.2.0",
         "features": [
             "ambiguous-router",
             "correct-bucket-review",
@@ -63,6 +66,8 @@ def health() -> dict[str, Any]:
             "setfit-or-sklearn-router",
             "cascade",
             "run-checkpoint",
+            "structured-ai-validate",
+            "semantic-route",
         ],
         "backends": {
             "ml_router": ml_backend,
@@ -233,3 +238,29 @@ def conflicts_report(payload: dict[str, Any] | None = None) -> JSONResponse:
         report["written_to"] = None
         report["write_error"] = str(exc)
     return JSONResponse({"ok": True, "report": report, "sources": [str(p) for p in paths]})
+
+
+@app.post("/quality/semantic-route")
+def quality_semantic_route(payload: dict[str, Any]) -> JSONResponse:
+    comments = str(payload.get("comments") or payload.get("last 10 comments") or "")
+    family = payload.get("family")
+    min_score = float(payload.get("min_score") or 72)
+    return JSONResponse(semantic_route(comments, min_score=min_score, family=family))
+
+
+@app.post("/quality/validate-ai-batch")
+def quality_validate_ai_batch(payload: dict[str, Any]) -> JSONResponse:
+    items = payload.get("items") or payload.get("batch") or payload.get("leads") or []
+    if isinstance(items, dict):
+        items = [items]
+    expected = payload.get("expected_count")
+    expected_i = int(expected) if expected is not None else None
+    return JSONResponse(validate_ai_batch(list(items), expected_count=expected_i))
+
+
+@app.post("/quality/validate-verifier-batch")
+def quality_validate_verifier_batch(payload: dict[str, Any]) -> JSONResponse:
+    items = payload.get("items") or payload.get("batch") or []
+    if isinstance(items, dict):
+        items = [items]
+    return JSONResponse(validate_verifier_batch(list(items)))

@@ -20,3 +20,10 @@ Snapshot dosyalarini n8n'e yeniden import etmeden canliya yansımaz.
 - `Telegram_Database_Validator_Bot_V2.original.json` — orijinal
 
 Detay: `docs/SMART-UPGRADES.md`, `docs/RULE-ENGINE-INTEGRATION.md`
+
+## Import-ready (advanced)
+
+- Prefer `05-V2-smart-upgraded.workflow.json` + `06-Front-Door-Telegram.workflow.json`.
+- After pull: re-import both in n8n Cloud; no PC-side LLM gateway required.
+- AI Agent prompt now includes ALLOWED status list + structured JSON contract.
+
