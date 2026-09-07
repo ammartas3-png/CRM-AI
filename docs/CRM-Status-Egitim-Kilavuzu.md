@@ -13,7 +13,7 @@ Bu rehber CRM’e status girerken doğru kararı vermen için yazıldı. Teknik 
 Yukarıdan aşağıdır. Üstteki durum varsa alttakine bakma.
 
 1. Kimlik inkârı (“ben Ahmad değilim”, “wrong person”, “this is not me”) → **Denied Registration**
-2. Dil bariyeri (Mandarin / Arapça / hard time in English) ve kimlik inkârı yok → **No Language**
+2. Dil bariyeri — Arapça (masa var) → **Call Again** (aktarım); Mandarin / ajan yok / hard time English → **No Language** (kimlik inkârı yoksa)
 3. 18 yaş altı / geçersiz ülke → **Under 18** / **Invalid Country**
 4. Para yok + uzak/belirsiz/çıkış (`next month`, `by October`, `not serious`, `discontinue`) → **No Potential**
 5. Para yok AMA yakın plan (maaş yakında, arrange funds, arkadaş yardımı) → **Call Again**
@@ -72,7 +72,14 @@ Invalid email olsa bile newest ring/NA → **No Answer** (Wrong Number değil).
 5+ ayrı günde cevap yok.
 
 ### 2.8 No Language
-Dil tutmuyor. Aynı cümlede kimlik inkârı varsa → **Denied Registration** (identity > language).
+Dil tutmuyor **ve** o dilde masa / çalışan yok.
+
+**Call Again (aktarım):** Raporda Arap ülkeleri / Arapça çalışan varsa müşteri Arapça konuşan agent’a aktarılır → **Call Again** (No Language değil).
+Örnek: `arabic speaker`, `fluent in arabic`, `speaks arabic`.
+
+**No Language kalır:** Mandarin / desteklenmeyen dil, veya `arabic not available` / `dvm in arabic not available`.
+
+Aynı cümlede kimlik inkârı varsa → **Denied Registration** (identity > language).
 
 ### 2.9 Denied Registration
 Kimlik inkârı şart. 1. gün Denied · 2. gün tekrar → Wrong Number.  
@@ -122,7 +129,8 @@ Ayıkla, kalan müşteri cümlesine bak.
 | not interested (1. gün) | Recall |
 | curse + istemiyorum | No Interest |
 | im not [name] / wrong person | Denied Registration |
-| Mandarin / no English (kimlik yok) | No Language |
+| Arabic speaker (desk var) | Call Again |
+| Mandarin / no English (kimlik yok, ajan yok) | No Language |
 | didnt register (kimlik yok) | Recall |
 | no id / no bank / no POR | No Potential - no documents |
 | na / vm / dvm / ring | No Answer 1-5 |
@@ -158,6 +166,7 @@ Ayıkla, kalan müşteri cümlesine bak.
 - didnt register = Denied sanmak
 - Invalid email = Wrong Number (telefon ring iken)
 - Soft money + maaş = No Potential yapmak
+- Arapça konuşuyor diye No Language (aktarım masası varken) — **Call Again** olmalı
 - Emin değilken status uydurmak (Manual Check kullan)
 
 ---
