@@ -38,13 +38,14 @@ Müşteri kapıyı kapatmadı. Net devam / randevu / kısa vadeli para planı va
 **Koyma**
 - next month / by October / in 4 months / don’t know when → **No Potential**
 - `cb:vm`, `cb na`, `call again rej` → agent notu, müşteri CB değil
-- i will do it by myself / dont think I’m interested → **Recall**
+- dont think I’m interested → **Recall**
+- i will do it by myself / dont need your help (red yok) → **Call Again** (kendi yatırmak istiyor, yardım istemiyor)
 - CB REJS → genelde **No Answer**
 
 ### 2.2 Recall — bugün soğuk, yarın bir daha dene
 Tek günde yumuşak veya net red; henüz kalıcı No Interest değil.
 
-**Koy:** not interested (ilk gün), doesnt want to proceed, dont need your help, i will do it by myself, “didnt register” (kimlik inkârı yok)
+**Koy:** not interested (ilk gün), doesnt want to proceed, “didnt register” (kimlik inkârı yok)
 
 **Koyma:** iki ayrı günde red → No Interest · küfür+istemiyorum → No Interest · aile çeviri/kart yardımı tek başına third_party değil
 
@@ -126,7 +127,7 @@ Ayıkla, kalan müşteri cümlesine bak.
 | no id / no bank / no POR | No Potential - no documents |
 | na / vm / dvm / ring | No Answer 1-5 |
 | invalid email + ring/NA | No Answer 1-5 |
-| i will do it by myself | Recall |
+| i will do it by myself / dont need your help | Call Again |
 | CB REJS | No Answer (genelde) |
 | emin değilim | Manual Check |
 
@@ -143,7 +144,7 @@ Ayıkla, kalan müşteri cümlesine bak.
 | E | im not Ahmad please speak Arabic | Denied Registration |
 | F | said i didnt register | Recall |
 | G | Invalid email - CRM … (yeni) ring, dvm | No Answer 1-5 |
-| H | i will do it by myself | Recall |
+| H | i will do it by myself / dont need your help | Call Again |
 | I | cb:vm + never reg and hung up | Recall |
 | J | cant afford now but will get help and deposit | Call Again |
 
