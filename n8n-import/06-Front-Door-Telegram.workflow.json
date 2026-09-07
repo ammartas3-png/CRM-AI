@@ -2154,7 +2154,7 @@
       "parameters": {
         "operation": "sendMessage",
         "chatId": "={{ $('Route Update').item.json.chat_id }}",
-        "text": "Upload started in V2. Reports will arrive here.",
+        "text": "Upload accepted by V2 (processing started). Large files can take several minutes. You will get summary + Excel here when done — if nothing arrives, V2 likely failed (check n8n Executions).",
         "additionalFields": {
           "appendAttribution": false
         }

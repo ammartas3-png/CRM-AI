@@ -1711,6 +1711,186 @@
         }
       },
       "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Avoid Merge1 deadlock: when EVERY lead is skipAI, the AI branch never runs\n// and Merge1 waits forever → no Telegram reports.\n// Route:\n// - all skipAI  → _route=direct (bypass AI + Merge1)\n// - any need AI → _route=via_ai (existing Build AI Batches → Merge1 path)\nconst items = $input.all();\nconst anyAI = items.some((i) => !i.json.skipAI);\nconst route = anyAI ? 'via_ai' : 'direct';\nreturn items.map((i) => ({ json: { ...i.json, _post_mm_route: route } }));\n"
+      },
+      "id": "8251fa2f-84fb-4b3e-87ff-2a8f8fcc0256",
+      "name": "Route SkipAI Or AI",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -808,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json._post_mm_route }}",
+                    "rightValue": "direct",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "direct"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json._post_mm_route }}",
+                    "rightValue": "via_ai",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "via_ai"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "9d432277-c6c8-488c-9d93-9582dd941102",
+      "name": "Post MM Route",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -648,
+        192
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "b9505101-4a47-4f44-b485-b2d74a95fd62",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1800,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ String($json.execution?.customData?.chat_id || $getWorkflowStaticData('global').telegramChatId || '').trim() }}",
+        "text": "={{ 'V2 failed: ' + String($json.execution?.error?.message || $json.message || 'unknown error').slice(0, 500) + '\\nNode: ' + String($json.execution?.lastNodeExecuted || $json.node?.name || '?') }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "dc4ae65b-d9fa-4b04-9170-651a2c959700",
+      "name": "Telegram On Error",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -1580,
+        200
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "q14sD9Geek2ExOku",
+          "name": "Telegram account"
+        }
+      },
+      "webhookId": "49c93b95-e716-4191-a25f-e0501d7a9c98"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "fs1",
+              "leftValue": "={{ $json.skipAI }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filter-skip-ai-001",
+      "name": "Filter Skip AI",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        2160,
+        1120
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "fn1",
+              "leftValue": "={{ $json.skipAI }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notTrue",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filter-need-ai-001",
+      "name": "Filter Need AI",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        2160,
+        1320
+      ]
     }
   ],
   "connections": {
@@ -1790,24 +1970,6 @@
         [
           {
             "node": "Merge",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "If": {
-      "main": [
-        [
-          {
-            "node": "Merge1",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Build AI Batches",
             "type": "main",
             "index": 0
           }
@@ -2284,7 +2446,7 @@
       "main": [
         [
           {
-            "node": "If",
+            "node": "Route SkipAI Or AI",
             "type": "main",
             "index": 0
           }
@@ -2466,6 +2628,73 @@
         [
           {
             "node": "Survey Phase?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route SkipAI Or AI": {
+      "main": [
+        [
+          {
+            "node": "Post MM Route",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post MM Route": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Filter Skip AI",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Filter Need AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Telegram On Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Skip AI": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Need AI": {
+      "main": [
+        [
+          {
+            "node": "Build AI Batches",
             "type": "main",
             "index": 0
           }
