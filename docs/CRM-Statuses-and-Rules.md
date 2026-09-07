@@ -34,7 +34,7 @@ Use when the phone is alive but there is **no real conversation**:
 **Not Call Again** if they hung up with no conversation.
 
 ### No Answer 5 UP
-Use when there are **5+ distinct days** of no-answer / no real conversation.
+Use when there are **5+ distinct days** of dialer-only NA/VM (same-day `navm` twice ≠ 5 UP). Verifier cannot invent 5 UP without those days. of no-answer / no real conversation.
 
 ### Important (system)
 - **Invalid email** + newest line is ring/NA/VM/DVM → keep **No Answer**, do **not** use Wrong Number (phone is alive).

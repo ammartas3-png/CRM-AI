@@ -29,6 +29,7 @@ module.exports = {
   isSoftMoneyCallAgain,
   isHardMoneyNoPotential,
   foldComments,
+  countDistinctNaDaysFromComments,
 };
 `;
   const sandbox = { module: { exports: {} }, exports: {} };
@@ -71,7 +72,7 @@ function main() {
     const gotTag = fix ? fix.tag : "";
     const folded = g.foldComments(row);
     const blocked = c.llm_correct_status
-      ? g.verifierOverrideBlocked(c.engine_status, c.llm_correct_status, folded)
+      ? g.verifierOverrideBlocked(c.engine_status, c.llm_correct_status, folded, c.comments)
       : null;
 
     const statusOk = normFam(gotStatus) === normFam(c.expect_status);
