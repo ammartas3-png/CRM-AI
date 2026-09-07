@@ -4247,11 +4247,11 @@
         {
           "row": 133,
           "trigger": "next month",
-          "status": "Call Again",
+          "status": "No Potential",
           "group": "follow_up",
           "repeat": "direct_final",
-          "first": "Call Again",
-          "again": "Call Again",
+          "first": "No Potential",
+          "again": "No Potential",
           "source": ""
         },
         {

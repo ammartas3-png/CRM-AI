@@ -2360,20 +2360,20 @@
   {
     "row_number": 133,
     "trigger_phrase": "next month",
-    "intent": "proceed_later",
-    "suggested_status": "Call Again",
+    "intent": "no_potential_timing",
+    "suggested_status": "No Potential",
     "confidence": 85,
     "priority": "medium",
-    "when_to_use": "Customer intends to proceed next month",
-    "when_not_to_use": "",
+    "when_to_use": "Vague next-month timing without concrete near-term funding → No Potential",
+    "when_not_to_use": "Do not use for Call Again; next month is not a callback",
     "active": true,
     "keyword_group": "follow_up",
     "example_comment": "will proceed next month",
     "correction_source": "curated_from_run523",
     "created_date": "2026-06-24",
     "repeat_logic": "direct_final",
-    "first_status": "Call Again",
-    "repeat_status": "Call Again"
+    "first_status": "No Potential",
+    "repeat_status": "No Potential"
   },
   {
     "row_number": 134,
