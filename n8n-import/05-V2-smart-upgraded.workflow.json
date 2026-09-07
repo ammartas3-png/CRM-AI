@@ -39,7 +39,7 @@
       "parameters": {
         "operation": "xlsx",
         "options": {
-          "fileName": "={ 'CRM_Validation_' + ($('Validation Country Loop').item.json._report_slug || 'All') + '_' + $now.setZone('Europe/Istanbul').toFormat('yyyy-MM-dd_HH-mm') + '.xlsx' }"
+          "fileName": "={{ 'CRM_Validation_' + ($('Validation Country Loop').item.json._report_slug || 'All') + '_' + $now.setZone('Europe/Istanbul').toFormat('yyyy-MM-dd_HH-mm') + '.xlsx' }}"
         }
       },
       "type": "n8n-nodes-base.convertToFile",
@@ -489,7 +489,7 @@
       "parameters": {
         "operation": "xlsx",
         "options": {
-          "fileName": "={ 'No_Answer_5UP_' + ($('5UP Country Loop').item.json._report_slug || 'All') + '_' + $now.setZone('Europe/Istanbul').toFormat('yyyy-MM-dd_HH-mm') + '.xlsx' }"
+          "fileName": "={{ 'No_Answer_5UP_' + ($('5UP Country Loop').item.json._report_slug || 'All') + '_' + $now.setZone('Europe/Istanbul').toFormat('yyyy-MM-dd_HH-mm') + '.xlsx' }}"
         }
       },
       "id": "c04ee8f5-b38d-46a5-843b-e0f82d4933c8",
@@ -651,7 +651,7 @@
       "parameters": {
         "operation": "xlsx",
         "options": {
-          "fileName": "={ 'CRM_Manual_Entry_' + ($('Manual Country Loop').item.json._report_slug || 'All') + '_' + $now.setZone('Europe/Istanbul').toFormat('yyyy-MM-dd_HH-mm') + '.xlsx' }"
+          "fileName": "={{ 'CRM_Manual_Entry_' + ($('Manual Country Loop').item.json._report_slug || 'All') + '_' + $now.setZone('Europe/Istanbul').toFormat('yyyy-MM-dd_HH-mm') + '.xlsx' }}"
         }
       },
       "id": "convert-to-file2-manual",
