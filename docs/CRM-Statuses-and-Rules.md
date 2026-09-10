@@ -183,12 +183,17 @@ Bare `didnt register` alone is **not** this → **Recall**.
 - **Same claim on a later day** → **Wrong Number or Email**
 
 ### Do NOT use Denied for
-- Bare `didnt register` (no “not me”) → **Recall**
+- Bare `didnt register` / `never registered` / `I’m not registering` / `not investing` / `not pursuing` (no “not me”) → **Recall**
 - `no id` / no bank → **No Potential - no documents**
 - Language only → see No Language / Arabic transfer
 
 **Priority:** identity denial **beats** language in the same sentence  
 (`I’m not Ahmad, speak Arabic` → **Denied Registration**).
+
+**Wrong-file reminders**
+- ACC90358 / ACC90523 / ACC90149: bare not-registering / not pursuing / never registered → **Recall**, not Denied Registration.
+- ACC493874: day-1 `interested` then day-2 `no longer interested` = **one** refusal day → **Recall** (not No Interest).
+- Newest dialer `na vm` must not wipe a prior **Recall** / **Call Again** conversation (ACC90272 / ACC90210 / ACC90630).
 
 ---
 

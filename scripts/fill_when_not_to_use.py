@@ -37,7 +37,8 @@ TEMPLATES = {
     ),
     "denied": (
         "[skip:language_only][skip:bare_didnt_register] Language barrier alone → No Language. "
-        "Bare 'didnt register' without identity denial → Recall. no id/docs/bank → No Potential - no documents."
+        "Bare didnt/never register, not registering, not investing, not pursuing without identity denial → Recall. "
+        "no id/docs/bank → No Potential - no documents."
     ),
     "wrong_number": (
         "[skip:phone_alive] Newest dialer ring/NA/VM/DVM/unreachable → keep No Answer. "

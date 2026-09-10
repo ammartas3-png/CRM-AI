@@ -103,7 +103,7 @@ First soft / clear refusal day — still try again soon.
 - `not interested` / doesn’t want to proceed (first day)
 - Soft refuse / cold close without two-day NI rule yet
 - `dont think I’m interested` (negated interest)
-- Bare `didnt register` / `I didn’t register` **without** identity denial (“I am not that person”)
+- Bare `didnt register` / `never registered` / `I’m not registering` / `not investing` / `not pursuing` **without** identity denial (“I am not that person”)
 - Cancel / afraid / trust issues without hard final junk (case-by-case; often Recall)
 
 ### Comment example
@@ -183,12 +183,17 @@ Bare `didnt register` alone is **not** this → **Recall**.
 - **Same claim on a later day** → **Wrong Number or Email**
 
 ### Do NOT use Denied for
-- Bare `didnt register` (no “not me”) → **Recall**
+- Bare `didnt register` / `never registered` / `I’m not registering` / `not investing` / `not pursuing` (no “not me”) → **Recall**
 - `no id` / no bank → **No Potential - no documents**
 - Language only → see No Language / Arabic transfer
 
 **Priority:** identity denial **beats** language in the same sentence  
 (`I’m not Ahmad, speak Arabic` → **Denied Registration**).
+
+**Wrong-file hatırlatma**
+- ACC90358 / ACC90523 / ACC90149: çıplak not-registering / not pursuing / never registered → **Recall**, Denied Registration değil.
+- ACC493874: gün-1 `interested` + gün-2 `no longer interested` = **tek** red günü → **Recall** (No Interest değil).
+- En yeni dialer `na vm`, önceki **Recall** / **Call Again** konuşmasını silmemeli (ACC90272 / ACC90210 / ACC90630).
 
 ---
 
@@ -317,7 +322,8 @@ Strip them mentally; decide from the remaining **customer** words.
 | not interested (first day) | Recall |
 | not interested on two days | No Interest |
 | im not Ahmad speak Arabic | Denied Registration |
-| said i didnt register | Recall |
+| said i didnt register / im not registering / not pursuing | Recall |
+| interested day1 then no longer interested day2 | Recall (1 refusal day) |
 | no id / no bank | No Potential - no documents |
 | mandarin / hard time English (no desk) | No Language |
 | dvm in arabic not available | No Language |

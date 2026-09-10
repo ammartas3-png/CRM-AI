@@ -90,3 +90,20 @@ Expect drops especially in:
 Remaining ~14 agent-redial Corrects are mostly CRM Call Again kept under 5 NA with no harder signal — by design for streak keep; they need human Telegram review, not more sheet deactivation.
 
 Remaining ~60 No Potential without money text / ~32 wrong-number without claim are mostly `crm_decided_kept` (CRM already that status, no contradicting signal). Separate review queue — not sheet phrase bugs.
+
+
+---
+
+## Wrong-file batch (ACC90630…ACC90149 / ACC493874) — 2026-09-10
+
+Paste helper CSV: `evals/SHEET_UPDATES_ACC_WRONG_FILE.csv` → live Google Sheet `CRM_AI_Rules`.
+
+| row | action |
+|-----|--------|
+| 112 `interested` | keep **active=FALSE** |
+| 240, 243–248 bare-reg Denied | set **active=FALSE** (Recall rows 592–594 cover these) |
+| 249 `denied the registration` | **suggested_status=Recall**, kg=`registration`, update when_not |
+| 592–594 | keep Recall; refresh when_not (bare reg → Recall) |
+| 626 `not interested` | note: positive day-1 interested ≠ refusal day |
+
+Also re-import `n8n-import/05-V2-smart-upgraded.workflow.json` (Memory Match skip + AI Agent Denied wording).
