@@ -737,7 +737,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Route webhook input:\n// - binary file upload (csv/xlsx/json) -> extract path\n// - JSON body -> Chunk Router directly\n// Captures Telegram chat_id from Front Door multipart form / JSON body into workflow staticData.\nconst item = $input.first();\n\nfunction detectKind(fileName, mime) {\n  const name = String(fileName || '').toLowerCase();\n  const m = String(mime || '').toLowerCase();\n  if (name.endsWith('.csv') || m.includes('csv') || m.includes('text/plain')) return 'csv';\n  if (name.endsWith('.xlsx') || m.includes('spreadsheetml')) return 'xlsx';\n  if (name.endsWith('.xls') || m.includes('ms-excel')) return 'xls';\n  if (name.endsWith('.json') || m.includes('json')) return 'json';\n  return 'unknown';\n}\n\nfunction pickChatId(it) {\n  const j = it.json || {};\n  const body = (j.body && typeof j.body === 'object') ? j.body : {};\n  const q = j.query || {};\n  const cand = j.chat_id || j.chatId || body.chat_id || body.chatId ||\n    q.chat_id || q.chatId || j._telegram_chat_id || body._telegram_chat_id || '';\n  return String(cand || '').trim();\n}\n\nconst chatId = pickChatId(item);\nconst sd = $getWorkflowStaticData('global');\nif (chatId) sd.telegramChatId = chatId;\n// Keep last known chat for chunk continuations if form omitted chat_id\nconst effectiveChat = chatId || String(sd.telegramChatId || '').trim();\n\nif (item.binary) {\n  const key = item.binary.file ? 'file' : Object.keys(item.binary)[0];\n  if (key) {\n    const b = item.binary[key];\n    const kind = detectKind(b.fileName, b.mimeType);\n    return [{\n      json: {\n        _input_type: 'binary',\n        _file_kind: kind,\n        _file_name: b.fileName || key,\n        _telegram_chat_id: effectiveChat,\n        chat_id: effectiveChat\n      },\n      binary: { file: b }\n    }];\n  }\n}\n\n// Survey vote continuation from Front Door (one-by-one Q&A)\nlet _peek = item.json?.body ?? item.json;\nif (typeof _peek === 'string') {\n  try { _peek = JSON.parse(_peek); } catch (e) { _peek = item.json; }\n}\nif (_peek && _peek._action === 'survey_vote') {\n  const c = String(_peek.chat_id || _peek.chatId || effectiveChat || '').trim();\n  if (c) sd.telegramChatId = c;\n  return [{\n    json: {\n      _input_type: 'survey_vote',\n      _action: 'survey_vote',\n      account: String(_peek.account || ''),\n      status: String(_peek.status || ''),\n      code: String(_peek.code || ''),\n      chat_id: c || effectiveChat,\n      _telegram_chat_id: c || effectiveChat\n    }\n  }];\n}\n\nlet root = item.json?.body ?? item.json;\nif (typeof root === 'string') {\n  try { root = JSON.parse(root); } catch (e) { root = item.json; }\n}\nfunction extractLeads(r) {\n  if (!r) return [];\n  if (Array.isArray(r)) return r;\n  if (Array.isArray(r.data)) return r.data;\n  if (r.data && Array.isArray(r.data.data)) return r.data.data;\n  return [];\n}\nconst leads = extractLeads(root);\nif (!leads.length) throw new Error('No leads found in JSON request.');\nconst contChat = String(root._telegram_chat_id || root.chat_id || effectiveChat || '').trim();\nif (contChat) sd.telegramChatId = contChat;\nreturn [{\n  json: {\n    data: { data: leads },\n    _input_type: 'json',\n    _chunk_part: root._chunk_part || null,\n    _chunk_total: root._chunk_total || null,\n    _pending_chunks: root._pending_chunks,\n    _chunk_meta: root._chunk_meta,\n    _telegram_chat_id: contChat,\n    chat_id: contChat\n  }\n}];\n"
+        "jsCode": "// Route webhook input:\n// - binary file upload (csv/xlsx/json) -> extract path\n// - JSON body -> Chunk Router directly\n// Captures Telegram chat_id from Front Door multipart form / JSON body into workflow staticData.\nconst item = $input.first();\n\nfunction detectKind(fileName, mime) {\n  const name = String(fileName || '').toLowerCase();\n  const m = String(mime || '').toLowerCase();\n  if (name.endsWith('.csv') || m.includes('csv') || m.includes('text/plain')) return 'csv';\n  if (name.endsWith('.xlsx') || m.includes('spreadsheetml')) return 'xlsx';\n  if (name.endsWith('.xls') || m.includes('ms-excel')) return 'xls';\n  if (name.endsWith('.json') || m.includes('json')) return 'json';\n  return 'unknown';\n}\n\nfunction pickChatId(it) {\n  const j = it.json || {};\n  const body = (j.body && typeof j.body === 'object') ? j.body : {};\n  const q = j.query || {};\n  const cand = j.chat_id || j.chatId || body.chat_id || body.chatId ||\n    q.chat_id || q.chatId || j._telegram_chat_id || body._telegram_chat_id || '';\n  return String(cand || '').trim();\n}\n\nconst chatId = pickChatId(item);\nconst sd = $getWorkflowStaticData('global');\nif (chatId) sd.telegramChatId = chatId;\n// Keep last known chat for chunk continuations if form omitted chat_id\nconst effectiveChat = chatId || String(sd.telegramChatId || '').trim();\n\nconst _textVote = (function textSurveyFallback() {\n  try {\n    const queue = Array.isArray(sd.pendingSurvey) ? sd.pendingSurvey : [];\n    if (!queue.length) return null;\n    let root = item.json?.body ?? item.json;\n    if (typeof root === 'string') { try { root = JSON.parse(root); } catch (e) { root = item.json; } }\n    const rawText = String(root?.text || root?.message?.text || root?.body?.text || '').trim().toLowerCase();\n    if (!rawText) return null;\n    // TEXT SURVEY FALLBACK\n    const CODE = {\n      ok: 'ok', ai: 'ok', 'accept ai': 'ok', yes: 'ok',\n      ca: 'ca', 'call again': 'ca',\n      rc: 'rc', recall: 'rc',\n      na: 'na', 'no answer': 'na', 'no answer 1-5': 'na',\n      n5: 'n5', 'no answer 5 up': 'n5', '5up': 'n5',\n      ni: 'ni', 'no interest': 'ni',\n      np: 'np', 'no potential': 'np',\n      wn: 'wn', 'wrong number': 'wn',\n      wn: 'wn',\n      dr: 'dr', 'denied reg': 'dr', 'denied registration': 'dr',\n      keep: 'keep', 'keep crm': 'keep'\n    };\n    const code = CODE[rawText];\n    if (!code) return null;\n    const STATUS = {\n      ok: queue[0]?.suggested || queue[0]?.ai_proposal || '',\n      ca: 'Call Again', rc: 'Recall', na: 'No Answer 1-5', n5: 'No Answer 5 UP',\n      ni: 'No Interest', np: 'No Potential', wn: 'Wrong Number or Email',\n      dr: 'Denied Registration', keep: 'Keep CRM'\n    };\n    const chat = String(root.chat_id || root.chatId || sd.surveyChatId || sd.telegramChatId || effectiveChat || '').trim();\n    if (chat) sd.telegramChatId = chat;\n    return [{\n      json: {\n        _input_type: 'survey_vote',\n        _action: 'survey_vote',\n        account: String(queue[0].account || ''),\n        status: code === 'ok' ? (STATUS.ok || 'Accept AI') : (STATUS[code] || code),\n        code,\n        chat_id: chat,\n        _telegram_chat_id: chat\n      }\n    }];\n  } catch (e) { return null; }\n})();\nif (_textVote) return _textVote;\n\n\nif (item.binary) {\n  const key = item.binary.file ? 'file' : Object.keys(item.binary)[0];\n  if (key) {\n    const b = item.binary[key];\n    const kind = detectKind(b.fileName, b.mimeType);\n    return [{\n      json: {\n        _input_type: 'binary',\n        _file_kind: kind,\n        _file_name: b.fileName || key,\n        _telegram_chat_id: effectiveChat,\n        chat_id: effectiveChat\n      },\n      binary: { file: b }\n    }];\n  }\n}\n\n// Survey vote continuation from Front Door (one-by-one Q&A)\nlet _peek = item.json?.body ?? item.json;\nif (typeof _peek === 'string') {\n  try { _peek = JSON.parse(_peek); } catch (e) { _peek = item.json; }\n}\nif (_peek && _peek._action === 'survey_vote') {\n  const c = String(_peek.chat_id || _peek.chatId || effectiveChat || '').trim();\n  if (c) sd.telegramChatId = c;\n  return [{\n    json: {\n      _input_type: 'survey_vote',\n      _action: 'survey_vote',\n      account: String(_peek.account || ''),\n      status: String(_peek.status || ''),\n      code: String(_peek.code || ''),\n      chat_id: c || effectiveChat,\n      _telegram_chat_id: c || effectiveChat\n    }\n  }];\n}\n\nlet root = item.json?.body ?? item.json;\nif (typeof root === 'string') {\n  try { root = JSON.parse(root); } catch (e) { root = item.json; }\n}\nfunction extractLeads(r) {\n  if (!r) return [];\n  if (Array.isArray(r)) return r;\n  if (Array.isArray(r.data)) return r.data;\n  if (r.data && Array.isArray(r.data.data)) return r.data.data;\n  return [];\n}\nconst leads = extractLeads(root);\nif (!leads.length) throw new Error('No leads found in JSON request.');\nconst contChat = String(root._telegram_chat_id || root.chat_id || effectiveChat || '').trim();\nif (contChat) sd.telegramChatId = contChat;\nreturn [{\n  json: {\n    data: { data: leads },\n    _input_type: 'json',\n    _chunk_part: root._chunk_part || null,\n    _chunk_total: root._chunk_total || null,\n    _pending_chunks: root._pending_chunks,\n    _chunk_meta: root._chunk_meta,\n    _telegram_chat_id: contChat,\n    chat_id: contChat\n  }\n}];\n"
       },
       "id": "input-router-001",
       "name": "Input Router",
@@ -1269,7 +1269,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Send ONLY the first pending uncertain lead (one-by-one Q&A).\n// AI / Manual Check proposals: Telegram confirm → Google Sheets + Manual Entry (QA path).\n// Return NO items when queue empty so Send Survey Telegram does not run.\nconst sd = $getWorkflowStaticData('global');\nconst chatId = String(\n  $('Input Router').first().json.chat_id ||\n  $('Input Router').first().json._telegram_chat_id ||\n  sd.surveyChatId ||\n  sd.telegramChatId ||\n  $input.first().json.chat_id ||\n  ''\n).trim();\nconst queue = Array.isArray(sd.pendingSurvey) ? sd.pendingSurvey : [];\nif (!queue.length) {\n  return [];\n}\n\nconst total = queue.length;\nconst q = queue[0];\nconst ai = String(q.suggested || q.ai_proposal || '').trim();\nconst text =\n`Uncertain lead 1/${total}\nAccount: ${q.account}\nCRM: ${q.crm || '-'}\nAI suggests: ${ai || '(none)'}\nAgent: ${q.agent || '-'}\nWhy: ${q.reason || '-'}\nComment: ${q.comments || '-'}\n\nConfirm AI suggestion or pick another status:`;\n\nreturn [{\n  json: {\n    chat_id: chatId,\n    survey_text: text,\n    account: q.account,\n    ai_suggestion: ai,\n    _survey_index: 1,\n    _survey_total: total,\n    skip_survey: false\n  }\n}];\n"
+        "jsCode": "\nfunction withSurveyCallbacks(payload) {\n  const acc = String(payload.account || '').slice(0, 40);\n  const mk = (code) => 'v|' + acc + '|' + code;\n  return {\n    ...payload,\n    cb_ok: mk('ok'),\n    cb_ca: mk('ca'),\n    cb_rc: mk('rc'),\n    cb_na: mk('na'),\n    cb_n5: mk('n5'),\n    cb_ni: mk('ni'),\n    cb_np: mk('np'),\n    cb_wn: mk('wn'),\n    cb_dr: mk('dr'),\n    cb_keep: mk('keep')\n  };\n}\n\n// Send ONLY the first pending uncertain lead (one-by-one Q&A).\n// AI / Manual Check proposals: Telegram confirm → Google Sheets + Manual Entry (QA path).\n// Return NO items when queue empty so Send Survey Telegram does not run.\nconst sd = $getWorkflowStaticData('global');\nconst chatId = String(\n  $('Input Router').first().json.chat_id ||\n  $('Input Router').first().json._telegram_chat_id ||\n  sd.surveyChatId ||\n  sd.telegramChatId ||\n  $input.first().json.chat_id ||\n  ''\n).trim();\nconst queue = Array.isArray(sd.pendingSurvey) ? sd.pendingSurvey : [];\nif (!queue.length) {\n  return [];\n}\n\nconst total = queue.length;\nconst q = queue[0];\nconst ai = String(q.suggested || q.ai_proposal || '').trim();\nconst text =\n`Uncertain lead 1/${total}\nAccount: ${q.account}\nCRM: ${q.crm || '-'}\nAI suggests: ${ai || '(none)'}\nAgent: ${q.agent || '-'}\nWhy: ${q.reason || '-'}\nComment: ${q.comments || '-'}\n\n👇 Tap a button below (or reply: ok / ca / rc / na / n5 / ni / np / wn / dr / keep)`;\n\nreturn [{\n  json: withSurveyCallbacks({\n    chat_id: chatId,\n    survey_text: text,\n    account: q.account,\n    ai_suggestion: ai,\n    _survey_index: 1,\n    _survey_total: total,\n    skip_survey: false\n  })\n}];\n"
       },
       "id": "build-survey-msgs",
       "name": "Build Survey Messages",
@@ -1283,8 +1283,109 @@
     {
       "parameters": {
         "operation": "sendMessage",
-        "chatId": "={{ String(($('Input Router').first().json.chat_id || $('Input Router').first().json._telegram_chat_id || $getWorkflowStaticData('global').telegramChatId || $json.chat_id || '')).trim() }}",
+        "chatId": "={{ String(($json.chat_id || $('Input Router').first().json.chat_id || $('Input Router').first().json._telegram_chat_id || $getWorkflowStaticData('global').telegramChatId || $getWorkflowStaticData('global').surveyChatId || '')).trim() }}",
         "text": "={{ $json.survey_text }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "✅ Accept AI",
+                    "additionalFields": {
+                      "callback_data": "={{ $json.cb_ok }}"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "Call Again",
+                    "additionalFields": {
+                      "callback_data": "={{ $json.cb_ca }}"
+                    }
+                  },
+                  {
+                    "text": "Recall",
+                    "additionalFields": {
+                      "callback_data": "={{ $json.cb_rc }}"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "No Answer 1-5",
+                    "additionalFields": {
+                      "callback_data": "={{ $json.cb_na }}"
+                    }
+                  },
+                  {
+                    "text": "No Answer 5 UP",
+                    "additionalFields": {
+                      "callback_data": "={{ $json.cb_n5 }}"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "No Interest",
+                    "additionalFields": {
+                      "callback_data": "={{ $json.cb_ni }}"
+                    }
+                  },
+                  {
+                    "text": "No Potential",
+                    "additionalFields": {
+                      "callback_data": "={{ $json.cb_np }}"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "Wrong Number",
+                    "additionalFields": {
+                      "callback_data": "={{ $json.cb_wn }}"
+                    }
+                  },
+                  {
+                    "text": "Denied Reg",
+                    "additionalFields": {
+                      "callback_data": "={{ $json.cb_dr }}"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "Keep CRM",
+                    "additionalFields": {
+                      "callback_data": "={{ $json.cb_keep }}"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
         "additionalFields": {
           "appendAttribution": false,
           "replyMarkup": "inlineKeyboard",
@@ -1296,7 +1397,7 @@
                     {
                       "text": "✅ Accept AI",
                       "additionalFields": {
-                        "callback_data": "={{ 'v|' + String($json.account || '').slice(0,40) + '|ok' }}"
+                        "callback_data": "={{ $json.cb_ok }}"
                       }
                     }
                   ]
@@ -1308,13 +1409,13 @@
                     {
                       "text": "Call Again",
                       "additionalFields": {
-                        "callback_data": "={{ 'v|' + String($json.account || '').slice(0,40) + '|ca' }}"
+                        "callback_data": "={{ $json.cb_ca }}"
                       }
                     },
                     {
                       "text": "Recall",
                       "additionalFields": {
-                        "callback_data": "={{ 'v|' + String($json.account || '').slice(0,40) + '|rc' }}"
+                        "callback_data": "={{ $json.cb_rc }}"
                       }
                     }
                   ]
@@ -1326,13 +1427,13 @@
                     {
                       "text": "No Answer 1-5",
                       "additionalFields": {
-                        "callback_data": "={{ 'v|' + String($json.account || '').slice(0,40) + '|na' }}"
+                        "callback_data": "={{ $json.cb_na }}"
                       }
                     },
                     {
-                      "text": "No Answer 5UP",
+                      "text": "No Answer 5 UP",
                       "additionalFields": {
-                        "callback_data": "={{ 'v|' + String($json.account || '').slice(0,40) + '|n5' }}"
+                        "callback_data": "={{ $json.cb_n5 }}"
                       }
                     }
                   ]
@@ -1344,13 +1445,13 @@
                     {
                       "text": "No Interest",
                       "additionalFields": {
-                        "callback_data": "={{ 'v|' + String($json.account || '').slice(0,40) + '|ni' }}"
+                        "callback_data": "={{ $json.cb_ni }}"
                       }
                     },
                     {
                       "text": "No Potential",
                       "additionalFields": {
-                        "callback_data": "={{ 'v|' + String($json.account || '').slice(0,40) + '|np' }}"
+                        "callback_data": "={{ $json.cb_np }}"
                       }
                     }
                   ]
@@ -1362,13 +1463,13 @@
                     {
                       "text": "Wrong Number",
                       "additionalFields": {
-                        "callback_data": "={{ 'v|' + String($json.account || '').slice(0,40) + '|wn' }}"
+                        "callback_data": "={{ $json.cb_wn }}"
                       }
                     },
                     {
                       "text": "Denied Reg",
                       "additionalFields": {
-                        "callback_data": "={{ 'v|' + String($json.account || '').slice(0,40) + '|dr' }}"
+                        "callback_data": "={{ $json.cb_dr }}"
                       }
                     }
                   ]
@@ -1380,7 +1481,7 @@
                     {
                       "text": "Keep CRM",
                       "additionalFields": {
-                        "callback_data": "={{ 'v|' + String($json.account || '').slice(0,40) + '|keep' }}"
+                        "callback_data": "={{ $json.cb_keep }}"
                       }
                     }
                   ]
@@ -1405,7 +1506,7 @@
         }
       },
       "webhookId": "25dc3098-0270-4f11-b611-1ff908f94746",
-      "continueOnFail": true
+      "continueOnFail": false
     },
     {
       "parameters": {
@@ -1489,7 +1590,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Apply one Telegram status vote, then either ask next lead or finish Manual Entry.\n// code=ok|ai → accept AI Suggested Status from pending survey row.\nconst sd = $getWorkflowStaticData('global');\nconst j = $input.first().json;\nconst account = String(j.account || '').trim();\nlet status = String(j.status || '').trim();\nconst code = String(j.code || '').trim().toLowerCase();\nconst chatId = String(j.chat_id || sd.surveyChatId || sd.telegramChatId || '').trim();\nif (chatId) {\n  sd.surveyChatId = chatId;\n  sd.telegramChatId = chatId;\n}\n\nconst queue = Array.isArray(sd.pendingSurvey) ? sd.pendingSurvey.slice() : [];\nconst answers = Array.isArray(sd.surveyAnswers) ? sd.surveyAnswers.slice() : [];\n\nlet hit = null;\nconst nextQueue = [];\nfor (const q of queue) {\n  if (!hit && String(q.account || '').trim() === account) hit = q;\n  else nextQueue.push(q);\n}\nif (!hit && queue.length) {\n  hit = queue[0];\n  nextQueue.splice(0, nextQueue.length, ...queue.slice(1));\n}\n\nconst aiSuggested = String(hit?.suggested || hit?.ai_proposal || j.ai_suggestion || '').trim();\nif (code === 'ok' || code === 'ai' || /^accept[_ ]?ai$/i.test(status) || status === 'ACCEPT_AI') {\n  status = aiSuggested || status;\n}\nif (status === 'ACCEPT_AI') status = aiSuggested;\n\nif (hit) {\n  answers.push({\n    ...hit,\n    ai_status: aiSuggested,\n    human_status: status,\n    code,\n    ai_accepted: !!(aiSuggested && status && aiSuggested.toLowerCase() === status.toLowerCase()),\n    answered_at: new Date().toISOString()\n  });\n}\nsd.surveyAnswers = answers;\nsd.pendingSurvey = nextQueue;\n\nsd.sheetLearning = Array.isArray(sd.sheetLearning) ? sd.sheetLearning : [];\nlet lastMemory = null;\nif (hit && status && !/^keep crm$/i.test(status)) {\n  lastMemory = {\n    type: 'telegram_confirm',\n    account_no: hit.account || account,\n    old_status: hit.crm || '',\n    ai_status: aiSuggested,\n    new_status: status,\n    validation_result: 'Human Telegram Confirm',\n    decision_source: (aiSuggested && aiSuggested.toLowerCase() === status.toLowerCase())\n      ? 'ai_accepted_telegram'\n      : 'human_override_telegram',\n    matched_keyword: code,\n    confidence: 'Human',\n    reason: String(hit.reason || '').slice(0, 200),\n    example_comment: String(hit.comments || '').slice(0, 280),\n    created_at: new Date().toISOString()\n  };\n  sd.sheetLearning.push(lastMemory);\n}\n\n\nif (nextQueue.length > 0) {\n  const q = nextQueue[0];\n  const total = nextQueue.length + answers.length;\n  const idx = answers.length + 1;\n  const ai = String(q.suggested || q.ai_proposal || '').trim();\n  const text =\n`Uncertain lead ${idx}/${total}\nAccount: ${q.account}\nCRM: ${q.crm || '-'}\nAI suggests: ${ai || '(none)'}\nAgent: ${q.agent || '-'}\nWhy: ${q.reason || '-'}\nComment: ${q.comments || '-'}\n\nConfirm AI suggestion or pick another status:`;\n  return [{\n    json: {\n      _survey_phase: 'next',\n      chat_id: chatId,\n      account: q.account,\n      ai_suggestion: ai,\n      survey_text: text,\n      skip_survey: false,\n      ...(lastMemory || {})\n    }\n  }];\n}\n\nconst engine = Array.isArray(sd.engineManualCandidates) ? sd.engineManualCandidates : [];\nconst seen = new Set();\nconst rows = [];\n\nfunction pushRow(r) {\n  const acc = String(r['account no'] || r.account || '').trim();\n  if (!acc || seen.has(acc)) return;\n  seen.add(acc);\n  rows.push(r);\n}\n\nfor (const a of answers) {\n  const human = String(a.human_status || '').trim();\n  if (!human || /^keep crm$/i.test(human)) continue;\n  pushRow({\n    brand: a.brand || '',\n    'account no': a.account || '',\n    'last 10 comments': a.comments || '',\n    'customer status': human,\n    country: a.country || '',\n    Agent: a.agent || '',\n    'Current Agent Office': a.office || '',\n    'Old Status (CRM)': a.crm || '',\n    'AI Suggested Status': a.ai_status || '',\n    Reason: a.ai_accepted\n      ? `Telegram accepted AI (${a.code || 'ok'}): ${a.ai_status || human}`\n      : `Telegram override (${a.code || 'vote'}): AI=${a.ai_status || '-'} → Human=${human}`,\n    'Decision Source': a.ai_accepted ? 'ai_accepted_telegram' : 'human_override_telegram',\n    'Match Detail': a.reason || '',\n    'Applied to CRM': '',\n    'Applied At': '',\n    'Applied By': '',\n    'Review Notes': ''\n  });\n}\nfor (const e of engine) pushRow(e);\n\nsd.pendingSurvey = [];\nsd.engineManualCandidates = [];\n\nif (!rows.length) {\n  return [{\n    json: {\n      _survey_phase: 'done_empty',\n      chat_id: chatId,\n      done_text: '✅ All questions answered. No CRM status changes for Manual Entry (Keep CRM / no diffs).',\n      ...(lastMemory || {})\n    }\n  }];\n}\n\nreturn rows.map((r, i) => ({\n  json: {\n    ...r,\n    _survey_phase: 'done',\n    chat_id: chatId,\n    _qa_manual: true,\n    _qa_index: i,\n    _qa_total: rows.length,\n    done_text: `✅ All questions answered (${answers.length}). Manual Entry file with ${rows.length} row(s) follows. Confirmed answers are logged to Google Sheets Decision_Memory.`,\n    ...(i === 0 && lastMemory ? lastMemory : {})\n  }\n}));\n"
+        "jsCode": "\nfunction withSurveyCallbacks(payload) {\n  const acc = String(payload.account || '').slice(0, 40);\n  const mk = (code) => 'v|' + acc + '|' + code;\n  return {\n    ...payload,\n    cb_ok: mk('ok'),\n    cb_ca: mk('ca'),\n    cb_rc: mk('rc'),\n    cb_na: mk('na'),\n    cb_n5: mk('n5'),\n    cb_ni: mk('ni'),\n    cb_np: mk('np'),\n    cb_wn: mk('wn'),\n    cb_dr: mk('dr'),\n    cb_keep: mk('keep')\n  };\n}\n\n// Apply one Telegram status vote, then either ask next lead or finish Manual Entry.\n// code=ok|ai → accept AI Suggested Status from pending survey row.\nconst sd = $getWorkflowStaticData('global');\nconst j = $input.first().json;\nconst account = String(j.account || '').trim();\nlet status = String(j.status || '').trim();\nconst code = String(j.code || '').trim().toLowerCase();\nconst chatId = String(j.chat_id || sd.surveyChatId || sd.telegramChatId || '').trim();\nif (chatId) {\n  sd.surveyChatId = chatId;\n  sd.telegramChatId = chatId;\n}\n\nconst queue = Array.isArray(sd.pendingSurvey) ? sd.pendingSurvey.slice() : [];\nif (!queue.length) {\n  return [{ json: {\n    _survey_phase: 'done_empty',\n    chat_id: chatId,\n    done_text: 'No pending uncertain lead to answer. Upload a file (or wait for the next question).',\n    skip_survey: true\n  }}];\n}\n\nconst answers = Array.isArray(sd.surveyAnswers) ? sd.surveyAnswers.slice() : [];\n\nlet hit = null;\nconst nextQueue = [];\nfor (const q of queue) {\n  if (!hit && String(q.account || '').trim() === account) hit = q;\n  else nextQueue.push(q);\n}\nif (!hit && queue.length) {\n  hit = queue[0];\n  nextQueue.splice(0, nextQueue.length, ...queue.slice(1));\n}\n\nconst aiSuggested = String(hit?.suggested || hit?.ai_proposal || j.ai_suggestion || '').trim();\nif (code === 'ok' || code === 'ai' || /^accept[_ ]?ai$/i.test(status) || status === 'ACCEPT_AI') {\n  status = aiSuggested || status;\n}\nif (status === 'ACCEPT_AI') status = aiSuggested;\n\nif (hit) {\n  answers.push({\n    ...hit,\n    ai_status: aiSuggested,\n    human_status: status,\n    code,\n    ai_accepted: !!(aiSuggested && status && aiSuggested.toLowerCase() === status.toLowerCase()),\n    answered_at: new Date().toISOString()\n  });\n}\nsd.surveyAnswers = answers;\nsd.pendingSurvey = nextQueue;\n\nsd.sheetLearning = Array.isArray(sd.sheetLearning) ? sd.sheetLearning : [];\nlet lastMemory = null;\nif (hit && status && !/^keep crm$/i.test(status)) {\n  lastMemory = {\n    type: 'telegram_confirm',\n    account_no: hit.account || account,\n    old_status: hit.crm || '',\n    ai_status: aiSuggested,\n    new_status: status,\n    validation_result: 'Human Telegram Confirm',\n    decision_source: (aiSuggested && aiSuggested.toLowerCase() === status.toLowerCase())\n      ? 'ai_accepted_telegram'\n      : 'human_override_telegram',\n    matched_keyword: code,\n    confidence: 'Human',\n    reason: String(hit.reason || '').slice(0, 200),\n    example_comment: String(hit.comments || '').slice(0, 280),\n    created_at: new Date().toISOString()\n  };\n  sd.sheetLearning.push(lastMemory);\n}\n\n\nif (nextQueue.length > 0) {\n  const q = nextQueue[0];\n  const total = nextQueue.length + answers.length;\n  const idx = answers.length + 1;\n  const ai = String(q.suggested || q.ai_proposal || '').trim();\n  const text =\n`Uncertain lead ${idx}/${total}\nAccount: ${q.account}\nCRM: ${q.crm || '-'}\nAI suggests: ${ai || '(none)'}\nAgent: ${q.agent || '-'}\nWhy: ${q.reason || '-'}\nComment: ${q.comments || '-'}\n\n👇 Tap a button below (or reply: ok / ca / rc / na / n5 / ni / np / wn / dr / keep)`;\n  return [{\n    json: withSurveyCallbacks({\n      _survey_phase: 'next',\n      chat_id: chatId,\n      account: q.account,\n      ai_suggestion: ai,\n      survey_text: text,\n      skip_survey: false,\n      ...(lastMemory || {})\n    })\n  }];\n}\n\nconst engine = Array.isArray(sd.engineManualCandidates) ? sd.engineManualCandidates : [];\nconst seen = new Set();\nconst rows = [];\n\nfunction pushRow(r) {\n  const acc = String(r['account no'] || r.account || '').trim();\n  if (!acc || seen.has(acc)) return;\n  seen.add(acc);\n  rows.push(r);\n}\n\nfor (const a of answers) {\n  const human = String(a.human_status || '').trim();\n  if (!human || /^keep crm$/i.test(human)) continue;\n  pushRow({\n    brand: a.brand || '',\n    'account no': a.account || '',\n    'last 10 comments': a.comments || '',\n    'customer status': human,\n    country: a.country || '',\n    Agent: a.agent || '',\n    'Current Agent Office': a.office || '',\n    'Old Status (CRM)': a.crm || '',\n    'AI Suggested Status': a.ai_status || '',\n    Reason: a.ai_accepted\n      ? `Telegram accepted AI (${a.code || 'ok'}): ${a.ai_status || human}`\n      : `Telegram override (${a.code || 'vote'}): AI=${a.ai_status || '-'} → Human=${human}`,\n    'Decision Source': a.ai_accepted ? 'ai_accepted_telegram' : 'human_override_telegram',\n    'Match Detail': a.reason || '',\n    'Applied to CRM': '',\n    'Applied At': '',\n    'Applied By': '',\n    'Review Notes': ''\n  });\n}\nfor (const e of engine) pushRow(e);\n\nsd.pendingSurvey = [];\nsd.engineManualCandidates = [];\n\nif (!rows.length) {\n  return [{\n    json: {\n      _survey_phase: 'done_empty',\n      chat_id: chatId,\n      done_text: '✅ All questions answered. No CRM status changes for Manual Entry (Keep CRM / no diffs).',\n      ...(lastMemory || {})\n    }\n  }];\n}\n\nreturn rows.map((r, i) => ({\n  json: {\n    ...r,\n    _survey_phase: 'done',\n    chat_id: chatId,\n    _qa_manual: true,\n    _qa_index: i,\n    _qa_total: rows.length,\n    done_text: `✅ All questions answered (${answers.length}). Manual Entry file with ${rows.length} row(s) follows. Confirmed answers are logged to Google Sheets Decision_Memory.`,\n    ...(i === 0 && lastMemory ? lastMemory : {})\n  }\n}));\n"
       },
       "id": "0ff6ae8f-a415-46ae-899e-d521bcfea530",
       "name": "Survey Vote Handler",
