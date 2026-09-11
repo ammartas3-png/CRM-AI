@@ -1,0 +1,9 @@
+row_number,trigger_phrase,intent,suggested_status,confidence,priority,when_to_use,when_not_to_use,active,first_status,repeat_status,note
+229,invalid email,wrong_contact,No Answer 1-5,95,high,Invalid email + dialer NA stays No Answer 1-5,Never Wrong Number from email alone (ACC90464),True,No Answer 1-5,No Answer 1-5,UPDATE
+712,used hindi speaker,language_transfer,Call Again,95,high,Agent used hindi speaker / second voice — transfer desk Call Again (ACC90450),If true language barrier with no transfer desk → No Language; if made by mistake → Recall,True,Call Again,Call Again,ADD
+713,hindi speaker second voice,language_transfer,Call Again,95,high,Hindi second voice on call → Call Again transfer (ACC90450),,True,Call Again,Call Again,ADD
+714,asked to get a call on,open_followup,Call Again,92,high,Concrete dated callback even with soft no money now (ACC90769),[skip:next_month_as_ca] next month salary without near date → No Potential,True,Call Again,Call Again,ADD
+715,worried about scam,open_followup,Call Again,90,high,Soft scam worry + ask friend / start later → Call Again (ACC90735),bad words + scam scam hard refuse → No Interest,True,Call Again,Call Again,ADD
+716,made it by mistake,soft_refusal,Recall,95,high,Day-1 made/signed by mistake → Recall (ACC90379),,True,Recall,Recall,ADD
+717,i did not registed,soft_refusal,Recall,92,high,Did not register / typo registed → Recall (ACC90470),Identity denial (im not NAME) → Denied Registration,True,Recall,Recall,ADD
+718,kept silent,soft_refusal,Recall,88,medium,PU kept silent after prior talk / refuse listen → Recall not NA (ACC90695),Pure dialer NA streak only → No Answer 1-5,True,Recall,Recall,ADD

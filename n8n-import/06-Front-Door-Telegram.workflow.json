@@ -27,7 +27,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const update = $input.first().json;\nconst sd = $getWorkflowStaticData('global');\n\nfunction home() {\n  sd.mode = '';\n  sd.review = null;\n  return { route: 'menu_home', chat_id: arguments[0] };\n}\n\nif (update.callback_query) {\n  const cb = update.callback_query;\n  const data = String(cb.data || '');\n  const chatId = cb.message?.chat?.id;\n  const base = {\n    callback_id: cb.id,\n    callback_data: data,\n    chat_id: chatId,\n    user_id: String(cb.from?.id || ''),\n    ack: 'OK'\n  };\n\n  // Survey votes (from V2)\n  if (data.startsWith('v|')) {\n    const parts = data.split('|');\n    const account = parts[1] || '';\n    const code = parts[2] || '';\n    const STATUS = { ca:'Call Again', na:'No Answer 1-5', n5:'No Answer 5 UP', rc:'Recall', ni:'No Interest', np:'No Potential', wn:'Wrong Number or Email', dr:'Denied Registration', keep:'Keep CRM' };\n    return [{ json: { ...base, route: 'vote', account, status: STATUS[code]||code, code, vote_ack: (code==='ok'||code==='ai') ? `Accept AI saved for ${account} (V2 will resolve AI status)` : `Saved: ${account} -> ${STATUS[code]||code}`, ack: (code==='ok'||code==='ai') ? 'Accept AI' : 'Saved' } }];\n  }\n\n  if (data === 'm:home' || data === 'm:start') {\n    sd.mode = ''; sd.review = null;\n    return [{ json: { ...base, route: 'menu_home', ack: 'Menu' } }];\n  }\n  if (data === 'm:db') {\n    sd.mode = ''; sd.review = null;\n    return [{ json: { ...base, route: 'menu_db', ack: 'Database check' } }];\n  }\n  if (data === 'm:rules') {\n    sd.mode = ''; sd.review = null;\n    return [{ json: { ...base, route: 'menu_rules', ack: 'Rules' } }];\n  }\n  if (data === 'm:review') {\n    sd.mode = 'review';\n    return [{ json: { ...base, route: 'menu_review_start', ack: 'Review' } }];\n  }\n  if (data === 'm:ask') {\n    sd.mode = 'ask';\n    return [{ json: { ...base, route: 'menu_ask', ack: 'Ask mode' } }];\n  }\n\n  // Review actions\n  if (data === 'rev:ok' || data === 'rev:skip' || data === 'rev:next') {\n    return [{ json: { ...base, route: 'review_next', action: data.slice(4), ack: data === 'rev:ok' ? 'Correct' : 'Next' } }];\n  }\n  if (data === 'rev:bad') {\n    return [{ json: { ...base, route: 'review_wrong', ack: 'Wrong' } }];\n  }\n  if (data === 'rev:exit') {\n    sd.mode = ''; sd.review = null;\n    return [{ json: { ...base, route: 'menu_home', ack: 'Exit review' } }];\n  }\n  if (data.startsWith('fix:')) {\n    const code = data.slice(4);\n    const STATUS = { ca:'Call Again', na:'No Answer 1-5', n5:'No Answer 5 UP', rc:'Recall', ni:'No Interest', np:'No Potential', wn:'Wrong Number or Email', dr:'Denied Registration', mc:'Manual Check', keep:'Keep as-is' };\n    return [{ json: { ...base, route: 'review_fix', fix_code: code, fix_status: STATUS[code]||code, ack: STATUS[code]||code } }];\n  }\n\n  // unknown callback -> home\n  return [{ json: { ...base, route: 'menu_home', ack: 'OK' } }];\n}\n\nconst message = update.message || {};\nconst chatId = message.chat?.id;\nconst text = String(message.text || '').trim();\nconst low = text.toLowerCase();\n\nif (text.startsWith('/start') || low === 'menu') {\n  sd.mode = ''; sd.review = null;\n  return [{ json: { route: 'menu_home', chat_id: chatId } }];\n}\n\nif (message.document) {\n  return [{ json: {\n    route: 'document', chat_id: chatId,\n    file_id: message.document.file_id,\n    file_name: message.document.file_name || 'upload.xlsx',\n    mime_type: message.document.mime_type || ''\n  }}];\n}\n\n// Ask mode: free text comment to match against sheet\nif (sd.mode === 'ask' && text) {\n  if (low === 'exit' || low === '/exit') {\n    sd.mode = '';\n    return [{ json: { route: 'menu_home', chat_id: chatId } }];\n  }\n  return [{ json: { route: 'ask_text', chat_id: chatId, text } }];\n}\n\n// Fallbacks if buttons fail\nif (low === '1' || low === 'database' || low === 'database check') {\n  return [{ json: { route: 'menu_db', chat_id: chatId, callback_id: '' } }];\n}\nif (low === '2' || low === 'rules') {\n  return [{ json: { route: 'menu_rules', chat_id: chatId, callback_id: '' } }];\n}\n\n// TEXT SURVEY CODE: typing ok/ca/ni/... while answering uncertain leads\nconst SURVEY_CODE = {\n  ok: 'ok', ai: 'ok', yes: 'ok',\n  ca: 'ca', 'call again': 'ca',\n  rc: 'rc', recall: 'rc',\n  na: 'na', 'no answer': 'na',\n  n5: 'n5', '5up': 'n5',\n  ni: 'ni', 'no interest': 'ni',\n  np: 'np', 'no potential': 'np',\n  wn: 'wn', 'wrong number': 'wn',\n  dr: 'dr', 'denied reg': 'dr',\n  keep: 'keep', 'keep crm': 'keep'\n};\nconst surveyCode = SURVEY_CODE[low];\nif (surveyCode) {\n  const STATUS = {\n    ok: 'Accept AI', ca: 'Call Again', rc: 'Recall', na: 'No Answer 1-5', n5: 'No Answer 5 UP',\n    ni: 'No Interest', np: 'No Potential', wn: 'Wrong Number or Email',\n    dr: 'Denied Registration', keep: 'Keep CRM'\n  };\n  return [{ json: {\n    route: 'vote',\n    chat_id: chatId,\n    account: '',\n    status: STATUS[surveyCode] || surveyCode,\n    code: surveyCode,\n    vote_ack: 'Text vote: ' + (STATUS[surveyCode] || surveyCode),\n    ack: 'Saved'\n  }}];\n}\n\nreturn [{ json: { route: 'menu_home', chat_id: chatId } }];\n"
+        "jsCode": "const update = $input.first().json;\nconst sd = $getWorkflowStaticData('global');\n\nfunction home() {\n  sd.mode = '';\n  sd.review = null;\n  return { route: 'menu_home', chat_id: arguments[0] };\n}\n\nconst STATUS_MAP = { ok:'Accept AI', ai:'Accept AI', ca:'Call Again', na:'No Answer 1-5', n5:'No Answer 5 UP', rc:'Recall', ni:'No Interest', np:'No Potential', wn:'Wrong Number or Email', dr:'Denied Registration', keep:'Keep CRM' };\nconst SURVEY_CODE = {\n  ok: 'ok', ai: 'ok', yes: 'ok',\n  ca: 'ca', 'call again': 'ca',\n  rc: 'rc', recall: 'rc',\n  na: 'na', 'no answer': 'na',\n  n5: 'n5', '5up': 'n5',\n  ni: 'ni', 'no interest': 'ni',\n  np: 'np', 'no potential': 'np',\n  wn: 'wn', 'wrong number': 'wn',\n  dr: 'dr', 'denied reg': 'dr',\n  keep: 'keep', 'keep crm': 'keep'\n};\n\nfunction votePayload(base, account, code, chatId) {\n  const status = STATUS_MAP[code] || code;\n  const reason = String(sd.discussReason || '').trim();\n  const acc = String(account || sd.discussAcc || '').trim();\n  sd.mode = '';\n  sd.discussAcc = '';\n  // keep discussReason until Append / Prep Survey Vote clears it\n  return {\n    ...base,\n    route: 'vote',\n    chat_id: chatId || base.chat_id,\n    account: acc,\n    status,\n    code,\n    reason,\n    vote_reason: reason,\n    vote_ack: (code==='ok'||code==='ai')\n      ? `Accept AI saved for ${account}` + (reason ? ` — ${reason.slice(0,120)}` : ' (V2 will resolve AI status)')\n      : `Saved: ${account} -> ${status}` + (reason ? `\\nReason: ${reason.slice(0,180)}` : ''),\n    ack: (code==='ok'||code==='ai') ? 'Accept AI' : 'Saved'\n  };\n}\n\nif (update.callback_query) {\n  const cb = update.callback_query;\n  const data = String(cb.data || '');\n  const chatId = cb.message?.chat?.id;\n  const base = {\n    callback_id: cb.id,\n    callback_data: data,\n    chat_id: chatId,\n    user_id: String(cb.from?.id || ''),\n    ack: 'OK'\n  };\n\n  // Survey discuss (AI chat about one lead)\n  if (data.startsWith('d|')) {\n    const account = data.split('|')[1] || '';\n    sd.mode = 'survey_discuss';\n    sd.discussAcc = account;\n    sd.discussReason = '';\n    return [{ json: {\n      ...base,\n      route: 'survey_discuss_start',\n      account,\n      discuss_prompt:\n`💬 Discuss ${account}\n\nWrite your thought (e.g. \"housewife // saudia\" or why Call Again / No Potential).\nAI will reply with a suggested status + reason.\n\nThen tap Confirm, or keep chatting, or use status buttons.\nType exit to cancel discuss mode.`\n    }}];\n  }\n\n  // Survey votes (from V2)\n  if (data.startsWith('v|')) {\n    const parts = data.split('|');\n    const account = parts[1] || '';\n    const code = parts[2] || '';\n    return [{ json: votePayload(base, account, code, chatId) }];\n  }\n\n  if (data === 'm:home' || data === 'm:start') {\n    sd.mode = ''; sd.review = null; sd.discussAcc = '';\n    return [{ json: { ...base, route: 'menu_home', ack: 'Menu' } }];\n  }\n  if (data === 'm:db') {\n    sd.mode = ''; sd.review = null;\n    return [{ json: { ...base, route: 'menu_db', ack: 'Database check' } }];\n  }\n  if (data === 'm:rules') {\n    sd.mode = ''; sd.review = null;\n    return [{ json: { ...base, route: 'menu_rules', ack: 'Rules' } }];\n  }\n  if (data === 'm:review') {\n    sd.mode = 'review';\n    return [{ json: { ...base, route: 'menu_review_start', ack: 'Review' } }];\n  }\n  if (data === 'm:ask') {\n    sd.mode = 'ask';\n    return [{ json: { ...base, route: 'menu_ask', ack: 'Ask mode' } }];\n  }\n\n  // Review actions\n  if (data === 'rev:ok' || data === 'rev:skip' || data === 'rev:next') {\n    return [{ json: { ...base, route: 'review_next', action: data.slice(4), ack: data === 'rev:ok' ? 'Correct' : 'Next' } }];\n  }\n  if (data === 'rev:bad') {\n    return [{ json: { ...base, route: 'review_wrong', ack: 'Wrong' } }];\n  }\n  if (data === 'rev:exit') {\n    sd.mode = ''; sd.review = null;\n    return [{ json: { ...base, route: 'menu_home', ack: 'Exit review' } }];\n  }\n  if (data.startsWith('fix:')) {\n    const code = data.slice(4);\n    const STATUS = { ca:'Call Again', na:'No Answer 1-5', n5:'No Answer 5 UP', rc:'Recall', ni:'No Interest', np:'No Potential', wn:'Wrong Number or Email', dr:'Denied Registration', mc:'Manual Check', keep:'Keep as-is' };\n    return [{ json: { ...base, route: 'review_fix', fix_code: code, fix_status: STATUS[code]||code, ack: STATUS[code]||code } }];\n  }\n\n  // unknown callback -> home\n  return [{ json: { ...base, route: 'menu_home', ack: 'OK' } }];\n}\n\nconst message = update.message || {};\nconst chatId = message.chat?.id;\nconst text = String(message.text || '').trim();\nconst low = text.toLowerCase();\n\nif (text.startsWith('/start') || low === 'menu') {\n  sd.mode = ''; sd.review = null; sd.discussAcc = '';\n  return [{ json: { route: 'menu_home', chat_id: chatId } }];\n}\n\nif (message.document) {\n  return [{ json: {\n    route: 'document', chat_id: chatId,\n    file_id: message.document.file_id,\n    file_name: message.document.file_name || 'upload.xlsx',\n    mime_type: message.document.mime_type || ''\n  }}];\n}\n\n// Ask mode: free text comment to match against sheet\nif (sd.mode === 'ask' && text) {\n  if (low === 'exit' || low === '/exit') {\n    sd.mode = '';\n    return [{ json: { route: 'menu_home', chat_id: chatId } }];\n  }\n  return [{ json: { route: 'ask_text', chat_id: chatId, text } }];\n}\n\n// Survey discuss mode: free text → V2 AI; short status codes still vote\nif (sd.mode === 'survey_discuss' && text) {\n  if (low === 'exit' || low === '/exit') {\n    sd.mode = '';\n    sd.discussAcc = '';\n    return [{ json: { route: 'menu_home', chat_id: chatId } }];\n  }\n  const surveyCode = SURVEY_CODE[low];\n  if (surveyCode) {\n    const account = String(sd.discussAcc || '');\n    return [{ json: votePayload({ callback_id: '', callback_data: '', user_id: '', ack: 'Saved' }, account, surveyCode, chatId) }];\n  }\n  return [{ json: {\n    route: 'survey_discuss',\n    chat_id: chatId,\n    account: String(sd.discussAcc || ''),\n    user_message: text,\n    text\n  }}];\n}\n\n// Fallbacks if buttons fail\nif (low === '1' || low === 'database' || low === 'database check') {\n  return [{ json: { route: 'menu_db', chat_id: chatId, callback_id: '' } }];\n}\nif (low === '2' || low === 'rules') {\n  return [{ json: { route: 'menu_rules', chat_id: chatId, callback_id: '' } }];\n}\n\n// TEXT SURVEY CODE: typing ok/ca/ni/... while answering uncertain leads\nconst surveyCode = SURVEY_CODE[low];\nif (surveyCode) {\n  return [{ json: {\n    route: 'vote',\n    chat_id: chatId,\n    account: String(sd.discussAcc || ''),\n    status: STATUS_MAP[surveyCode] || surveyCode,\n    code: surveyCode,\n    reason: String(sd.discussReason || ''),\n    vote_reason: String(sd.discussReason || ''),\n    vote_ack: 'Text vote: ' + (STATUS_MAP[surveyCode] || surveyCode),\n    ack: 'Saved'\n  }}];\n}\n\nreturn [{ json: { route: 'menu_home', chat_id: chatId } }];\n"
       },
       "id": "route-update",
       "name": "Route Update",
@@ -56,7 +56,8 @@
                     "operator": {
                       "type": "string",
                       "operation": "equals"
-                    }
+                    },
+                    "id": "b404498f-af88-433b-a7bc-3774c73f42d2"
                   }
                 ],
                 "combinator": "and"
@@ -78,7 +79,8 @@
                     "operator": {
                       "type": "string",
                       "operation": "equals"
-                    }
+                    },
+                    "id": "3c2c41f5-9676-4ad1-a86c-848345f89ec2"
                   }
                 ],
                 "combinator": "and"
@@ -100,7 +102,8 @@
                     "operator": {
                       "type": "string",
                       "operation": "equals"
-                    }
+                    },
+                    "id": "51ca2cf9-190a-4704-b17e-cadb38e0f455"
                   }
                 ],
                 "combinator": "and"
@@ -122,7 +125,8 @@
                     "operator": {
                       "type": "string",
                       "operation": "equals"
-                    }
+                    },
+                    "id": "2620bda7-b75f-4467-a5ef-4cca8e06dc64"
                   }
                 ],
                 "combinator": "and"
@@ -144,7 +148,8 @@
                     "operator": {
                       "type": "string",
                       "operation": "equals"
-                    }
+                    },
+                    "id": "0d1690ef-9858-4dad-ac5a-4739b6d68b13"
                   }
                 ],
                 "combinator": "and"
@@ -166,7 +171,8 @@
                     "operator": {
                       "type": "string",
                       "operation": "equals"
-                    }
+                    },
+                    "id": "dcbcc973-32c5-4536-8a8d-75c4e32fca24"
                   }
                 ],
                 "combinator": "and"
@@ -188,7 +194,8 @@
                     "operator": {
                       "type": "string",
                       "operation": "equals"
-                    }
+                    },
+                    "id": "ba85ab44-4b0b-4c37-8cfc-9c3251b48614"
                   }
                 ],
                 "combinator": "and"
@@ -210,7 +217,8 @@
                     "operator": {
                       "type": "string",
                       "operation": "equals"
-                    }
+                    },
+                    "id": "ed219dd6-340c-42d0-8e28-e92b0e2d3bb9"
                   }
                 ],
                 "combinator": "and"
@@ -232,7 +240,8 @@
                     "operator": {
                       "type": "string",
                       "operation": "equals"
-                    }
+                    },
+                    "id": "d95545c2-1ae4-438b-802b-eeec2b129c15"
                   }
                 ],
                 "combinator": "and"
@@ -254,7 +263,8 @@
                     "operator": {
                       "type": "string",
                       "operation": "equals"
-                    }
+                    },
+                    "id": "9d7801ab-e793-4157-8d69-e284d92a746b"
                   }
                 ],
                 "combinator": "and"
@@ -272,11 +282,58 @@
                 "conditions": [
                   {
                     "leftValue": "={{ $json.route }}",
+                    "rightValue": "survey_discuss_start",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "61621709-09c2-418d-8687-f964b7a42939"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "survey_discuss_start"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "survey_discuss",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "31c7169b-3aa1-423b-a5d0-0265c23f69c2"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "survey_discuss"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.route }}",
                     "rightValue": "vote",
                     "operator": {
                       "type": "string",
                       "operation": "equals"
-                    }
+                    },
+                    "id": "d6765aa1-b472-4355-9317-b19874eb6c05"
                   }
                 ],
                 "combinator": "and"
@@ -2198,13 +2255,14 @@
           "name": "Telegram account"
         }
       },
-      "webhookId": "3d4c546b-7861-426b-b2ba-47dcdc5cca13"
+      "webhookId": "3d4c546b-7861-426b-b2ba-47dcdc5cca13",
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
         "operation": "sendMessage",
-        "chatId": "={{ $json.chat_id }}",
-        "text": "={{ \"✅ \" + $json.vote_ack + \"\\nNext question (or Manual Entry file) is coming…\" }}",
+        "chatId": "={{ String($json.chat_id || $json.chatId || $('Route Update').first().json.chat_id || '') }}",
+        "text": "={{ \"✅ \" + String($json.vote_ack || $('Route Update').first().json.vote_ack || 'Saved') + \"\\nNext question (or Manual Entry file) is coming…\" }}",
         "additionalFields": {
           "appendAttribution": false
         }
@@ -2223,7 +2281,8 @@
           "name": "Telegram account"
         }
       },
-      "webhookId": "679b2f2d-490c-4a4e-9e0e-f98e4e15c33c"
+      "webhookId": "679b2f2d-490c-4a4e-9e0e-f98e4e15c33c",
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -2250,10 +2309,124 @@
             "decision_source": "={{ $json.code === 'ok' || $json.code === 'ai' ? 'ai_accepted_telegram' : 'telegram_survey' }}",
             "matched_keyword": "={{ $json.code }}",
             "confidence": "Human",
-            "reason": "={{ $json.vote_ack }}",
+            "reason": "={{ $json.reason || $json.vote_reason || $json.vote_ack }}",
             "example_comment": "",
             "ai_status": "={{ $json.code === 'ok' || $json.code === 'ai' ? 'ACCEPT_AI' : '' }}"
-          }
+          },
+          "schema": [
+            {
+              "id": "type",
+              "displayName": "type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "account_no",
+              "displayName": "account_no",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "old_status",
+              "displayName": "old_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "new_status",
+              "displayName": "new_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "validation_result",
+              "displayName": "validation_result",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "decision_source",
+              "displayName": "decision_source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "matched_keyword",
+              "displayName": "matched_keyword",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "confidence",
+              "displayName": "confidence",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "reason",
+              "displayName": "reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "example_comment",
+              "displayName": "example_comment",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ai_status",
+              "displayName": "ai_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
         },
         "options": {}
       },
@@ -2271,11 +2444,12 @@
           "name": "Google Sheets account 2"
         }
       },
-      "continueOnFail": true
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "jsCode": "const j = $input.first().json;\nreturn [{\n  json: {\n    ...j,\n    _action: 'survey_vote',\n    account: String(j.account || ''),\n    status: String(j.status || ''),\n    code: String(j.code || ''),\n    chat_id: String(j.chat_id || ''),\n    chatId: String(j.chat_id || '')\n  }\n}];\n"
+        "jsCode": "const j = $input.first().json;\nconst vote = (() => { try { return $('Route Update').first().json || {}; } catch (e) { return {}; } })();\nconst sd = $getWorkflowStaticData('global');\nconst src = { ...vote, ...j };\nconst chat = String(src.chat_id || src.chatId || vote.chat_id || '');\nconst reason = String(src.reason || src.vote_reason || sd.discussReason || '').trim();\nsd.discussReason = '';\nsd.discussAcc = '';\nsd.mode = (sd.mode === 'survey_discuss') ? '' : sd.mode;\nreturn [{\n  json: {\n    ...src,\n    _action: 'survey_vote',\n    account: String(src.account || ''),\n    status: String(src.status || ''),\n    code: String(src.code || ''),\n    reason,\n    chat_id: chat,\n    chatId: chat,\n    vote_ack: String(src.vote_ack || '')\n  }\n}];\n"
       },
       "id": "b42b83bb-c3db-4820-95a5-43f7ed99c7a3",
       "name": "Prep Survey Vote To V2",
@@ -2292,7 +2466,7 @@
         "url": "https://ammartd20.app.n8n.cloud/webhook/Database-check",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ _action: 'survey_vote', account: $json.account, status: $json.status, code: $json.code, chat_id: String($json.chat_id || ''), chatId: String($json.chat_id || '') }) }}",
+        "jsonBody": "={{ JSON.stringify({ _action: 'survey_vote', account: $json.account, status: $json.status, code: $json.code, reason: String($json.reason || ''), chat_id: String($json.chat_id || $json.chatId || ''), chatId: String($json.chat_id || $json.chatId || '') }) }}",
         "options": {
           "timeout": 10000,
           "response": {
@@ -2309,6 +2483,121 @@
       "position": [
         1820,
         700
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Answer Vote (answerCallbackQuery) replaces item with {ok:true} and drops chat_id.\n// Restore the parsed vote payload so Confirm / Append / Forward to V2 keep working.\nconst vote = $('Route Update').first().json;\nreturn [{ json: { ...vote } }];\n"
+      },
+      "id": "restore-vote-context",
+      "name": "Restore Vote Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "callback",
+        "operation": "answerQuery",
+        "queryId": "={{ $json.callback_id }}",
+        "additionalFields": {
+          "text": "Discuss mode"
+        }
+      },
+      "id": "answer-discuss",
+      "name": "Answer Discuss",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        940,
+        900
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "q14sD9Geek2ExOku",
+          "name": "Telegram account"
+        }
+      },
+      "webhookId": "0960d7d9-593c-40de-a8f3-5442da4734be",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const j = $('Route Update').first().json;\nreturn [{ json: { ...j } }];\n"
+      },
+      "id": "restore-discuss-context",
+      "name": "Restore Discuss Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1160,
+        900
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ String($json.chat_id || '') }}",
+        "text": "={{ $json.discuss_prompt }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "send-discuss-prompt",
+      "name": "Send Discuss Prompt",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1380,
+        900
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "q14sD9Geek2ExOku",
+          "name": "Telegram account"
+        }
+      },
+      "webhookId": "5bc5264c-c8aa-43fa-9a47-93f79e5cb453"
+    },
+    {
+      "parameters": {
+        "jsCode": "const j = $input.first().json;\nconst sd = $getWorkflowStaticData('global');\nconst chat = String(j.chat_id || j.chatId || '');\nconst account = String(j.account || sd.discussAcc || '');\nconst msg = String(j.user_message || j.text || '');\nif (account) sd.discussAcc = account;\nreturn [{ json: {\n  _action: 'survey_discuss',\n  account,\n  user_message: msg,\n  chat_id: chat,\n  chatId: chat\n}}];\n"
+      },
+      "id": "prep-survey-discuss",
+      "name": "Prep Survey Discuss",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        940,
+        1100
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://ammartd20.app.n8n.cloud/webhook/Database-check",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ _action: 'survey_discuss', account: $json.account, user_message: $json.user_message, chat_id: String($json.chat_id || $json.chatId || ''), chatId: String($json.chat_id || $json.chatId || '') }) }}",
+        "options": {
+          "timeout": 90000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "forward-survey-discuss",
+      "name": "Forward Survey Discuss To V2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1160,
+        1100
       ]
     }
   ],
@@ -2403,6 +2692,20 @@
         [
           {
             "node": "Processing",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Answer Discuss",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prep Survey Discuss",
             "type": "main",
             "index": 0
           }
@@ -2879,7 +3182,7 @@
       "main": [
         [
           {
-            "node": "Confirm Vote",
+            "node": "Restore Vote Context",
             "type": "main",
             "index": 0
           }
@@ -2913,6 +3216,50 @@
         [
           {
             "node": "Forward Survey Vote To V2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Vote Context": {
+      "main": [
+        [
+          {
+            "node": "Confirm Vote",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Answer Discuss": {
+      "main": [
+        [
+          {
+            "node": "Restore Discuss Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Discuss Context": {
+      "main": [
+        [
+          {
+            "node": "Send Discuss Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep Survey Discuss": {
+      "main": [
+        [
+          {
+            "node": "Forward Survey Discuss To V2",
             "type": "main",
             "index": 0
           }

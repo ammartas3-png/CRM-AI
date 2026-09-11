@@ -55,7 +55,8 @@ Use Call Again when there was a **real conversation** (or a clear customer ask t
   - will arrange funds / ask friends / will get help and deposit
   - give me time to source funds
 - **DIY self-serve:** `dont need your help` / `i will do it by myself` (still wants to invest; does not want agent help) → **Call Again**
-- **Arabic desk transfer:** client speaks Arabic and we have Arabic speakers/markets → transfer → **Call Again** (not No Language)
+- **Desk transfer (Arabic / Urdu / Hindi / Indian speakers):** client needs that language and we have agents → transfer → **Call Again** (not No Language)
+- Agent question like `how do u speak hindi?` is **not** a language barrier
 - Concrete customer callback / appointment (date and better with exact time; note IST vs local)
 
 ### Do NOT put Call Again when
@@ -322,7 +323,8 @@ Strip them mentally; decide from the remaining **customer** words.
 | not interested (first day) | Recall |
 | not interested on two days | No Interest |
 | im not Ahmad speak Arabic | Denied Registration |
-| said i didnt register | Recall |
+| said i didnt register / im not registering / not pursuing | Recall |
+| interested day1 then no longer interested day2 | Recall (1 refusal day) |
 | no id / no bank | No Potential - no documents |
 | mandarin / hard time English (no desk) | No Language |
 | dvm in arabic not available | No Language |
