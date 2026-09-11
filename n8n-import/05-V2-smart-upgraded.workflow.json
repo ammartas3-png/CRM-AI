@@ -1802,7 +1802,131 @@
             "reason": "={{ $json.reason || $json.done_text || \"\" }}",
             "example_comment": "={{ $json.example_comment || \"\" }}",
             "created_at": "={{ $json.created_at || $now.toISO() }}"
-          }
+          },
+          "schema": [
+            {
+              "id": "type",
+              "displayName": "type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "account_no",
+              "displayName": "account_no",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "old_status",
+              "displayName": "old_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "new_status",
+              "displayName": "new_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ai_status",
+              "displayName": "ai_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "validation_result",
+              "displayName": "validation_result",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "decision_source",
+              "displayName": "decision_source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "matched_keyword",
+              "displayName": "matched_keyword",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "confidence",
+              "displayName": "confidence",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "reason",
+              "displayName": "reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "example_comment",
+              "displayName": "example_comment",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
         },
         "options": {}
       },
@@ -2184,6 +2308,65 @@
         2160,
         544
       ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Append Survey Confirm (Google Sheets) can wipe item JSON on schema/error.\n// Always restore Survey Vote Handler payload so Survey Phase? sees _survey_phase=next.\nconst vote = $('Survey Vote Handler').first().json || {};\nreturn [{ json: { ...vote } }];\n"
+      },
+      "id": "restore-survey-context-after-confirm",
+      "name": "Restore Survey Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        1400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "manual-not-deferred",
+              "leftValue": "={{ $json.Reason }}",
+              "rightValue": "deferred",
+              "operator": {
+                "type": "string",
+                "operation": "notContains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "manual-entry-deferred-gate",
+      "name": "Manual Entry Deferred?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        900,
+        900
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Bot Q&A pending — do not send Manual Entry XLSX yet. Pass a marker so Merge End still completes.\nconst j = $input.first().json || {};\nreturn [{ json: { ...j, _skip_manual_file: true, status: 'manual_entry_deferred' } }];\n"
+      },
+      "id": "skip-manual-entry-send",
+      "name": "Skip Manual Entry Send",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        1000
+      ]
     }
   ],
   "connections": {
@@ -2425,7 +2608,7 @@
       "main": [
         [
           {
-            "node": "Convert to File2",
+            "node": "Manual Entry Deferred?",
             "type": "main",
             "index": 0
           }
@@ -2920,7 +3103,7 @@
       "main": [
         [
           {
-            "node": "Survey Phase?",
+            "node": "Restore Survey Context",
             "type": "main",
             "index": 0
           }
@@ -3037,6 +3220,46 @@
     "More 5UP Countries?": {
       "main": [
         []
+      ]
+    },
+    "Restore Survey Context": {
+      "main": [
+        [
+          {
+            "node": "Survey Phase?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Entry Deferred?": {
+      "main": [
+        [
+          {
+            "node": "Convert to File2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip Manual Entry Send",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip Manual Entry Send": {
+      "main": [
+        [
+          {
+            "node": "Merge End",
+            "type": "main",
+            "index": 1
+          }
+        ]
       ]
     }
   },
